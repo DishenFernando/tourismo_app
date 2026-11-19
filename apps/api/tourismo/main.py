@@ -14,8 +14,7 @@ from tourismo.core.config import get_settings
 from tourismo.core.database import get_db
 from tourismo.geography.routes import router as destination_router
 from tourismo.trips.routes import router as trips_router
-from tourismo.identity.security import require_user
-from tourismo.core.models import User
+from tourismo.identity.profile import router as identity_router
 
 settings = get_settings()
 _guest_rate_buckets: dict[str, deque[float]] = {}
@@ -92,12 +91,7 @@ def auth_config():
             'phone_otp_enabled': False, 'managed_provider_configured': settings.auth_ready}
 
 
-@app.get('/api/v1/me', tags=['identity'])
-def me(user: User = Depends(require_user)):
-    return {'id': str(user.id), 'display_name': user.display_name, 'locale': user.locale,
-            'status': user.status, 'roles': ['tourist']}
-
-
+app.include_router(identity_router)
 app.include_router(destination_router)
 app.include_router(trips_router)
 

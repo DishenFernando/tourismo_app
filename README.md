@@ -223,3 +223,14 @@ Tourismo/
 ## Original references and outstanding decisions
 
 Read `docs/PHASE_0_DISCOVERY.md` and `docs/ARCHITECTURE_AND_ROADMAP.md` for the full blueprint-preserving business decisions, module dependencies, future database domains, phase roadmap and acceptance gates. The original blueprint has not been replaced with a narrower feature specification.
+
+## Phase 1 update — Accounts, profiles and automatic user provisioning
+
+See [`docs/PHASE1_ACCOUNTS_AND_PROFILES.md`](docs/PHASE1_ACCOUNTS_AND_PROFILES.md) for the complete setup, safety notes, DBeaver SQL and acceptance tests.
+
+- Fixed missing PostgreSQL user rows: after a verified Clerk Google/email login, the frontend calls `POST /api/v1/auth/session/bootstrap` to provision the corresponding user by its verified Clerk subject.
+- Added a signed-in avatar/name dropdown (desktop and mobile), an optional completion reminder and a private, editable `/account` page.
+- Added safe `GET /api/v1/me` and `PATCH /api/v1/me` with server-side authorization and schema validation.
+- Added additive migration `0002_tourist_profiles`, preserving existing users/trips.
+- `CLERK_SECRET_KEY` is **optional** and **backend-only**, needed for automatic verified-email sync into PostgreSQL; do not include it in a frontend bundle or Git. Existing `CLERK_ISSUER`, `CLERK_JWKS_URL`, `VITE_CLERK_PUBLISHABLE_KEY` still apply.
+- These updates do not add tourist bookings, payments, artificial users, or public exposure of private profile fields.

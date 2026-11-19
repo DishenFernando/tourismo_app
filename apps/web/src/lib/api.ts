@@ -39,3 +39,13 @@ export const getDestinations = (query = '') => request<Destination[]>(`/destinat
 export const previewTrip = (draft: TripDraft) => request<TripPreview>('/trips/preview', {method:'POST', body:JSON.stringify(draft)})
 export const saveTrip = (draft: TripDraft, token: string) => request<SavedTrip>('/trips', {method:'POST', body:JSON.stringify(draft)}, token)
 export const savedTrips = (token: string) => request<SavedTrip[]>('/trips', {}, token)
+
+export type TourismoProfile = {
+  id: string; display_name: string|null; email: string|null; locale: 'en'|'si'|'ta';
+  home_region: string|null; bio: string|null; profile_completed: boolean;
+  status: string; roles: string[]
+}
+export type ProfileInput = Pick<TourismoProfile, 'display_name'|'locale'|'home_region'|'bio'>
+export const bootstrapProfile = (token:string) => request<TourismoProfile>('/auth/session/bootstrap', {method:'POST'}, token)
+export const getProfile = (token:string) => request<TourismoProfile>('/me', {}, token)
+export const updateProfile = (values:ProfileInput, token:string) => request<TourismoProfile>('/me', {method:'PATCH',body:JSON.stringify(values)}, token)

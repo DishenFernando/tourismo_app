@@ -62,3 +62,41 @@ def test_private_trip_owned_by_current_user():
     finally:
         app.dependency_overrides.clear()
         engine.dispose()
+
+
+@pytest.mark.skipif(not os.environ.get('TEST_DATABASE_URL'), reason='Requires disposable migrated PostgreSQL test database')
+def test_login_bootstrap_provisions_one_user_and_persists_profile():
+    """Both Google and email session types create rows only through provider-verified subjects."""
+    import uuid
+    from sqlalchemy import create_engine, select
+    from sqlalchemy.orm import Session
+    from tourismo.core.database import get_db
+    from tourismo.core.models import User
+    from tourismo.identity.security import require_identity, VerifiedIdentity
+    from tourismo.identity import profile as profile_module
+
+    engine = create_engine(os.environ['TEST_DATABASE_URL'])
+    subject = 'user_provision_test_' + uuid.uuid4().hex
+
+    def test_db():
+        with Session(engine) as session:
+            yield session
+
+    app.dependency_overrides[get_db] = test_db
+    app.dependency_overrides[require_identity] = lambda: VerifiedIdentity(subject=subject, session_id='sess_test')
+    original = profile_module.fetch_clerk_identity
+    profile_module.fetch_clerk_identity = lambda _subject: ('verified@test.example', 'Tourismo Tester')
+    try:
+        with TestClient(app) as test_client:
+            created = test_client.post('/api/v1/auth/session/bootstrap')
+            again = test_client.post('/api/v1/auth/session/bootstrap')
+            assert created.status_code == 200 and again.status_code == 200
+            assert created.json()['id'] == again.json()['id']
+            assert again.json()['email'] == 'verified@test.example'
+            with Session(engine) as db:
+                rows = db.scalars(select(User).where(User.auth_subject == subject)).all()
+                assert len(rows) == 1
+    finally:
+        profile_module.fetch_clerk_identity = original
+        app.dependency_overrides.clear()
+        engine.dispose()

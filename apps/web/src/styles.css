@@ -27,3 +27,9 @@
 @media(max-width:700px){.hero{min-height:0}.hero-art{min-height:245px;max-height:300px}.wrap{width:calc(100% - 32px)}.hero-search button{padding:13px 12px}.hero-search input{font-size:15px}.card-top{top:16%}.hero-title{letter-spacing:-.055em}}
 @media print{.topnav,.hero-search,button,.print\:hidden,footer{display:none!important}.wrap{width:100%;max-width:none}.form-panel{box-shadow:none;break-inside:avoid}.summary-panel{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition-duration:0.01ms!important;animation-duration:0.01ms!important}}
+
+.account-button{display:flex;align-items:center;gap:9px;border:1px solid #cde0d9;background:#fff;padding:6px 10px 6px 6px;border-radius:999px;color:#153e45}
+.account-button:hover{background:#f0f7f4}.account-menu{position:absolute;right:0;top:calc(100% + 10px);width:265px;border:1px solid #dce9e4;border-radius:15px;background:white;box-shadow:0 16px 38px #08303924;z-index:50;overflow:hidden}
+.account-menu-item{display:flex;align-items:center;gap:11px;text-align:left;padding:13px 16px;width:100%;font-size:14px;font-weight:650;color:#153e45}
+.account-menu-item:hover{background:#edf8f3}.account-menu-item:last-child{border-top:1px solid #e8f0ed}
+.field textarea{border:1px solid #d9e6e3;background:#fcfdfb;border-radius:10px;width:100%;padding:11px 12px;color:#153744;outline-color:#128c85;resize:vertical}

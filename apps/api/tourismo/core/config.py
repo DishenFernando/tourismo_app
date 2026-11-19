@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     database_url: str = 'postgresql+psycopg://tourismo:tourismo_dev@localhost:5432/tourismo'
     clerk_issuer: str = ''
     clerk_jwks_url: str = ''
+    clerk_secret_key: str = ''
     clerk_audience: str = ''
     allowed_auth_origins: str = 'http://localhost:5173,http://localhost:8000'
     enable_phone_otp: bool = False
