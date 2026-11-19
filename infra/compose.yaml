@@ -27,11 +27,22 @@ services:
         VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY:-}
     restart: unless-stopped
     env_file: ../.env
+    volumes:
+      - vendor_documents:/app/private_vendor_documents
     ports:
       - "8000:8000"
     depends_on:
       db:
         condition: service_healthy
 
+  clamav:
+    image: clamav/clamav:stable
+    profiles: ["vendor-scan"]
+    restart: unless-stopped
+    volumes:
+      - clamav_signatures:/var/lib/clamav
+
 volumes:
   db_data:
+  vendor_documents:
+  clamav_signatures:

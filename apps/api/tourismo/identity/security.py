@@ -16,6 +16,7 @@ bearer = HTTPBearer(auto_error=False)
 class VerifiedIdentity:
     subject: str
     session_id: str
+    second_factor_minutes: int | None = None
 
 
 @lru_cache(maxsize=8)
@@ -40,7 +41,9 @@ def verify_session_token(token: str) -> VerifiedIdentity:
             raise jwt.InvalidTokenError('Unauthorized token origin')
         if not isinstance(claims.get('sub'), str) or not claims['sub']:
             raise jwt.InvalidTokenError('Missing identity subject')
-        return VerifiedIdentity(subject=claims['sub'], session_id=claims['sid'])
+        age = claims.get('fva')
+        second_factor = age[1] if isinstance(age, (list, tuple)) and len(age) == 2 and isinstance(age[1], int) and age[1] >= 0 else None
+        return VerifiedIdentity(subject=claims['sub'], session_id=claims['sid'], second_factor_minutes=second_factor)
     except (jwt.PyJWTError, ValueError, TypeError) as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Invalid or expired session') from exc
 
@@ -70,3 +73,15 @@ def require_user(identity: VerifiedIdentity = Depends(require_identity), db: Ses
     if user.status != 'active':
         raise HTTPException(status_code=403, detail='Account not active')
     return user
+
+
+def require_privileged_mfa(identity: VerifiedIdentity = Depends(require_identity)) -> VerifiedIdentity:
+    """In production, require a recent Clerk second-factor verification for sensitive vendor review.
+
+    The frontend can direct users to Clerk account security to configure MFA. A normal
+    Google or email login does not substitute for a second factor.
+    """
+    if get_settings().app_environment.lower() == 'production':
+        if identity.second_factor_minutes is None or identity.second_factor_minutes > 10:
+            raise HTTPException(status_code=403, detail='Recent multi-factor verification required for vendor review')
+    return identity

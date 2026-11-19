@@ -14,6 +14,7 @@ WORKDIR /app/apps/api
 COPY apps/api/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt && groupadd -r app && useradd -r -g app app
 COPY apps/api/ ./
+RUN mkdir -p /app/private_vendor_documents && chown app:app /app/private_vendor_documents && chmod 700 /app/private_vendor_documents
 COPY --from=frontend /build/web/dist /app/web-dist
 USER app
 EXPOSE 8000

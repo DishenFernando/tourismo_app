@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     enable_phone_otp: bool = False
     cors_origins: str = 'http://localhost:5173'
     web_dist_path: str = '/app/web-dist'
+    vendor_document_dir: str = '/app/private_vendor_documents'
+    vendor_clamav_host: str = ''
+    vendor_clamav_port: int = Field(default=3310, ge=1, le=65535)
     rate_limit_requests: int = Field(default=120, ge=1, le=10000)
 
     @property

@@ -17,6 +17,7 @@ from tourismo.trips.routes import router as trips_router
 from tourismo.identity.profile import router as identity_router
 from tourismo.admin.routes import router as admin_router
 from tourismo.vendors.routes import router as vendor_router, admin_router as vendor_admin_router
+from tourismo.vendors.documents import router as vendor_documents_router, admin_router as vendor_documents_admin_router
 
 settings = get_settings()
 _guest_rate_buckets: dict[str, deque[float]] = {}
@@ -99,6 +100,8 @@ app.include_router(trips_router)
 app.include_router(admin_router)
 app.include_router(vendor_router)
 app.include_router(vendor_admin_router)
+app.include_router(vendor_documents_router)
+app.include_router(vendor_documents_admin_router)
 
 # Statically compiled React is served by this API container on Render.
 web_dist = Path(settings.web_dist_path)

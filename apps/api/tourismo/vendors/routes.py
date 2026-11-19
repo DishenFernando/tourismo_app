@@ -13,10 +13,10 @@ from sqlalchemy.orm import Session
 from tourismo.admin.permissions import require_admin
 from tourismo.core.database import get_db
 from tourismo.core.models import (
-    AuditEvent, User, VendorEvidence, VendorMembership,
+    AuditEvent, User, VendorDocument, VendorEvidence, VendorMembership,
     VendorOrganization, VendorVerificationCheck, now_utc,
 )
-from tourismo.identity.security import require_user
+from tourismo.identity.security import require_user, require_privileged_mfa
 
 router = APIRouter(prefix='/api/v1/vendor', tags=['vendor-onboarding'])
 admin_router = APIRouter(prefix='/api/v1/admin/vendor-verifications', tags=['vendor-verification'])
@@ -180,6 +180,28 @@ def _organization(db: Session, org_id: UUID, user: User, roles: tuple[str, ...] 
 def _editable(org: VendorOrganization):
     if org.verification_state not in ('draft', 'changes_requested', 'rejected'):
         raise HTTPException(status_code=409, detail='Submitted or approved records cannot be changed; request administrative review')
+
+
+@router.get('/organizations/{org_id}/compliance')
+def organization_compliance(org_id: UUID, user: User = Depends(require_user), db: Session = Depends(get_db)):
+    org = _organization(db, org_id, user)
+    references = db.scalars(select(VendorEvidence).where(VendorEvidence.organization_id == org.id)).all()
+    expired = [str(e.id) for e in references if e.expires_on and e.expires_on < date.today()]
+    return dict(verification_state=org.verification_state, expired_evidence_ids=expired,
+                verification_current=org.verification_state == 'approved' and not expired,
+                renewal_required=org.verification_state == 'expired_license' or bool(expired))
+
+
+@router.post('/organizations/{org_id}/start-renewal')
+def start_renewal(org_id: UUID, user: User = Depends(require_user), db: Session = Depends(get_db)):
+    org = _organization(db, org_id, user, ('owner',))
+    if org.verification_state != 'expired_license':
+        raise HTTPException(409, 'Renewal is available after license expiry is recorded')
+    org.verification_state = 'changes_requested'
+    org.review_feedback = 'Supply current registration or license evidence and resubmit for review.'
+    _event(db, user, 'vendor.verification.renewal_started', org)
+    db.commit()
+    return organization_dict(org)
 
 
 @router.post('/organizations', status_code=201)
@@ -348,7 +370,7 @@ def revoke_member(org_id: UUID, membership_id: UUID, user: User = Depends(requir
 
 
 @admin_router.get('')
-def verification_queue(state: Literal['submitted', 'approved', 'rejected', 'changes_requested'] = 'submitted',
+def verification_queue(state: Literal['submitted', 'approved', 'rejected', 'changes_requested', 'expired_license'] = 'submitted',
                        limit: int = Query(default=50, ge=1, le=100),
                        admin: User = Depends(require_admin), db: Session = Depends(get_db)):
     rows = db.scalars(select(VendorOrganization).where(VendorOrganization.verification_state == state)
@@ -364,14 +386,17 @@ def verification_case(org_id: UUID, admin: User = Depends(require_admin), db: Se
     evidence=db.scalars(select(VendorEvidence).where(VendorEvidence.organization_id == org.id)).all()
     checks=db.scalars(select(VendorVerificationCheck).where(
         VendorVerificationCheck.organization_id == org.id).order_by(VendorVerificationCheck.checked_at.desc())).all()
+    from tourismo.vendors.documents import _documents, document_dict
     return dict(organization=organization_dict(org), evidence=[evidence_dict(e) for e in evidence],
+        documents=[document_dict(doc) for doc in _documents(db, org.id)],
         history=[dict(decision=c.decision,reason=c.reason,source_url=c.source_url,
                       checked_at=c.checked_at.isoformat() if c.checked_at else None) for c in checks])
 
 
 @admin_router.post('/{org_id}/decision')
 def verification_decision(org_id: UUID, body: VerificationDecision,
-                          admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+                          admin: User = Depends(require_admin), db: Session = Depends(get_db),
+                          _mfa=Depends(require_privileged_mfa)):
     org=db.scalar(select(VendorOrganization).where(VendorOrganization.id == org_id).with_for_update())
     if org is None:
         raise HTTPException(status_code=404, detail='Organization not found')
@@ -384,6 +409,10 @@ def verification_decision(org_id: UUID, body: VerificationDecision,
         evidence=db.scalars(select(VendorEvidence).where(VendorEvidence.organization_id == org.id)).all()
         if not evidence or any(e.expires_on and e.expires_on < date.today() for e in evidence):
             raise HTTPException(status_code=409, detail='Valid supporting references required for approval')
+        documents = db.scalars(select(VendorDocument).where(VendorDocument.organization_id == org.id,
+            VendorDocument.deleted_at.is_(None))).all()
+        if any(document.scan_state != 'clean' for document in documents):
+            raise HTTPException(status_code=409, detail='Uploaded documents must pass malware scanning before approval')
     org.verification_state=body.decision
     org.reviewer_id=admin.id
     org.reviewed_at=now_utc()

@@ -108,7 +108,7 @@ export const getContentAudit = (token:string) => request<ContentAudit>('/admin/c
 
 // Phase 3.1: private business applications. These payloads MUST NOT be used for public listings.
 export type VendorCategory = 'accommodation'|'restaurant'|'guide'|'transport'|'tour_operator'|'activity'
-export type VendorState = 'draft'|'submitted'|'changes_requested'|'approved'|'rejected'
+export type VendorState = 'draft'|'submitted'|'changes_requested'|'approved'|'rejected'|'expired_license'
 export type VendorOrganization = {
   id:string; owner_id:string; category:VendorCategory; business_name:string;
   registration_no:string|null; contact_email:string; contact_phone:string|null;
@@ -127,7 +127,7 @@ export type VendorEvidence = {
 }
 export type VendorMember = {id:string; user_id:string; role:'owner'|'manager'|'staff'; state:'pending'|'active'|'revoked'}
 export type VendorCheck = {decision:string;reason:string;source_url:string|null;checked_at:string|null}
-export type VendorCase = {organization:VendorOrganization; evidence:VendorEvidence[]; history:VendorCheck[]}
+export type VendorCase = {organization:VendorOrganization; evidence:VendorEvidence[]; history:VendorCheck[]; documents:VendorDocument[]}
 export type VendorInvitation = {id:string;organization_id:string;role:string;state:string}
 export const vendorOrganizations = (token:string)=>request<VendorOrganization[]>('/vendor/organizations',{},token)
 export const createVendorOrganization = (body:VendorApplication,token:string)=>request<VendorOrganization>('/vendor/organizations',{method:'POST',body:JSON.stringify(body)},token)
@@ -142,3 +142,36 @@ export const acceptVendorInvitation = (id:string,token:string)=>request<{state:s
 export const vendorReviewQueue = (token:string,state:VendorState='submitted')=>request<VendorOrganization[]>(`/admin/vendor-verifications?state=${state}`,{},token)
 export const vendorReviewCase = (id:string,token:string)=>request<VendorCase>(`/admin/vendor-verifications/${id}`,{},token)
 export const vendorDecision = (id:string,decision:'approved'|'rejected'|'changes_requested',reason:string,source_url:string|null,token:string)=>request<VendorOrganization>(`/admin/vendor-verifications/${id}/decision`,{method:'POST',body:JSON.stringify({decision,reason,source_url})},token)
+
+
+// Phase 3.2 - private attachments. Never expose a public direct file URL.
+export type VendorDocument = {
+  id:string; evidence_id:string; name:string; media_type:string; size_bytes:number;
+  scan_state:'pending_scan'|'clean'|'infected'; uploaded_at:string|null; downloadable:boolean
+}
+export type VendorCompliance = {verification_state:VendorState;expired_evidence_ids:string[];verification_current:boolean;renewal_required:boolean}
+export const vendorDocuments=(orgId:string,token:string)=>request<VendorDocument[]>(`/vendor/organizations/${orgId}/documents`,{},token)
+export const vendorCompliance=(orgId:string,token:string)=>request<VendorCompliance>(`/vendor/organizations/${orgId}/compliance`,{},token)
+export const startVendorRenewal=(orgId:string,token:string)=>request<VendorOrganization>(`/vendor/organizations/${orgId}/start-renewal`,{method:'POST'},token)
+export async function uploadVendorDocument(orgId:string,evidenceId:string,file:File,token:string):Promise<VendorDocument> {
+  const form = new FormData();form.append('evidence_id',evidenceId);form.append('file',file)
+  const response=await fetch(`/api/v1/vendor/organizations/${orgId}/documents`,{
+    method:'POST',headers:{Authorization:`Bearer ${token}`},body:form
+  })
+  if(!response.ok){const body=await response.json().catch(()=>({}));throw new Error(typeof body.detail==='string'?body.detail:`Upload failed (${response.status})`)}
+  return response.json() as Promise<VendorDocument>
+}
+export const deleteVendorDocument=(orgId:string,docId:string,token:string)=>
+  fetch(`/api/v1/vendor/organizations/${orgId}/documents/${docId}`,{
+    method:'DELETE',headers:{Authorization:`Bearer ${token}`}
+  }).then(async response=>{if(!response.ok)throw new Error(`Delete failed (${response.status})`)})
+export async function downloadVendorDocument(orgId:string,docId:string,token:string,admin=false):Promise<void> {
+  const prefix=admin?'/admin/vendor-verifications/':'/vendor/organizations/'
+  const response=await fetch(`/api/v1${prefix}${orgId}/documents/${docId}/download`,{
+    headers:{Authorization:`Bearer ${token}`},cache:'no-store'
+  })
+  if(!response.ok){const body=await response.json().catch(()=>({}));throw new Error(typeof body.detail==='string'?body.detail:`Download unavailable (${response.status})`)}
+  const url=URL.createObjectURL(await response.blob());
+  try {const link=document.createElement('a');link.href=url;link.download='tourismo-vendor-evidence';link.click()}
+  finally {window.setTimeout(()=>URL.revokeObjectURL(url),10000)}
+}

@@ -227,7 +227,7 @@ class VendorOrganization(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
     __table_args__ = (
         CheckConstraint("category IN ('accommodation','restaurant','guide','transport','tour_operator','activity')", name='ck_vendor_category'),
-        CheckConstraint("verification_state IN ('draft','submitted','changes_requested','approved','rejected')", name='ck_vendor_state'),
+        CheckConstraint("verification_state IN ('draft','submitted','changes_requested','approved','rejected','expired_license')", name='ck_vendor_state'),
     )
 
 
@@ -271,3 +271,24 @@ class VendorVerificationCheck(Base):
     reason: Mapped[str] = mapped_column(String(600), nullable=False)
     source_url: Mapped[str | None] = mapped_column(String(2048))
     checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class VendorDocument(Base):
+    """Private evidence attachment. Only a clean scanner result permits retrieval."""
+    __tablename__ = 'vendor_documents'
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('vendor_organizations.id', ondelete='CASCADE'), nullable=False, index=True)
+    evidence_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('vendor_evidence.id', ondelete='RESTRICT'), nullable=False)
+    uploaded_by: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id', ondelete='RESTRICT'), nullable=False)
+    original_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    media_type: Mapped[str] = mapped_column(String(60), nullable=False)
+    storage_key: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    scan_state: Mapped[str] = mapped_column(String(20), nullable=False, default='pending_scan')
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, nullable=False)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    __table_args__ = (
+        CheckConstraint("scan_state IN ('pending_scan','clean','infected')", name='ck_vendor_document_scan'),
+        CheckConstraint('size_bytes > 0 AND size_bytes <= 5242880', name='ck_vendor_document_size'),
+    )
