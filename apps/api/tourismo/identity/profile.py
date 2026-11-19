@@ -11,6 +11,7 @@ from tourismo.core.config import get_settings
 from tourismo.core.database import get_db
 from tourismo.core.models import User, now_utc
 from tourismo.identity.security import require_user
+from tourismo.admin.permissions import active_roles
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix='/api/v1', tags=['identity'])
@@ -50,11 +51,11 @@ class ProfileUpdate(BaseModel):
         return value or None
 
 
-def serialize_profile(user: User) -> ProfileRead:
+def serialize_profile(user: User, db: Session | None = None) -> ProfileRead:
     return ProfileRead(id=str(user.id), display_name=user.display_name, email=user.email,
                        locale=user.locale, home_region=user.home_region, bio=user.bio,
                        profile_completed=user.profile_completed_at is not None,
-                       status=user.status, roles=['tourist'])
+                       status=user.status, roles=['tourist'] + (active_roles(db, user) if db is not None and hasattr(db, 'scalars') else []))
 
 
 def fetch_clerk_identity(subject: str) -> tuple[str | None, str | None] | None:
@@ -96,12 +97,12 @@ def bootstrap(user: User = Depends(require_user), db: Session = Depends(get_db))
             user.display_name = name[:160]
         db.commit()
         db.refresh(user)
-    return serialize_profile(user)
+    return serialize_profile(user, db)
 
 
 @router.get('/me', response_model=ProfileRead)
-def get_profile(user: User = Depends(require_user)):
-    return serialize_profile(user)
+def get_profile(user: User = Depends(require_user), db: Session = Depends(get_db)):
+    return serialize_profile(user, db)
 
 
 @router.patch('/me', response_model=ProfileRead)
@@ -114,4 +115,4 @@ def update_profile(details: ProfileUpdate, user: User = Depends(require_user), d
         user.profile_completed_at = now_utc()
     db.commit()
     db.refresh(user)
-    return serialize_profile(user)
+    return serialize_profile(user, db)

@@ -234,3 +234,13 @@ See [`docs/PHASE1_ACCOUNTS_AND_PROFILES.md`](docs/PHASE1_ACCOUNTS_AND_PROFILES.m
 - Added additive migration `0002_tourist_profiles`, preserving existing users/trips.
 - `CLERK_SECRET_KEY` is **optional** and **backend-only**, needed for automatic verified-email sync into PostgreSQL; do not include it in a frontend bundle or Git. Existing `CLERK_ISSUER`, `CLERK_JWKS_URL`, `VITE_CLERK_PUBLISHABLE_KEY` still apply.
 - These updates do not add tourist bookings, payments, artificial users, or public exposure of private profile fields.
+
+## Phase 2.5 — Pilot visitor guides and sourced attractions
+
+Five existing destination guides (Kandy, Galle, Anuradhapura, Sigiriya, Nuwara Eliya) now receive deeper source-referenced **English editorial samples**, 11 additional POIs and practical visiting tips. The public destination page includes attraction-category filters and individual POI tips. Migration `0007_pilot_destination_guides` upgrades only unmodified sample guides with no editor revisions; it never overwrites published/reviewed content. New attractions added to published destinations remain drafts.
+
+Read `docs/PHASE2_PART5_PILOT_GUIDES.md` for sources, limitations, DBeaver checks and the optional `scripts/verify-phase25.ps1` read-only smoke test. This does not finalize image licensing, translations, or Phase 2 acceptance.
+
+## Phase 3.1 — Vendor onboarding
+
+See [vendor application and manual verification guide](docs/PHASE3_PART1_VENDOR_ONBOARDING.md). Four additive private vendor tables and the `/vendors` and `/admin/vendors` screens have been added. The implementation does not yet upload private documents, publish listings, or activate trials.

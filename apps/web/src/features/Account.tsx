@@ -46,7 +46,7 @@ export function Account() {
         <section className="form-panel">
           <div className="flex flex-wrap items-center gap-4 mb-6">
             {auth.person?.avatar ? <img src={auth.person.avatar} alt="Your profile avatar" referrerPolicy="no-referrer" className="h-20 w-20 rounded-2xl object-cover"/> : <div className="grid h-20 w-20 place-items-center rounded-2xl bg-[#e6f4ee]"><UserRound className="text-pine" size={30}/></div>}
-            <div><p className="font-bold text-lg">{auth.person?.name||'Welcome to Tourismo'}</p><p className="text-sm text-ink/60">{auth.person?.email||'Email not available'}</p><p className="text-xs text-pine mt-1">Signed in with verified Clerk authentication</p></div>
+            <div><p className="font-bold text-lg">{auth.person?.name||'Welcome to Tourismo'}</p><p className="text-sm text-ink/60">{auth.person?.email||'Email not available'}</p><p className="text-xs text-pine mt-1">Signed in with verified Clerk authentication</p>{auth.profile&&<p className="text-xs text-ink/50 mt-2 break-all">Tourismo user ID for team invitations: <code>{auth.profile.id}</code> <button type="button" className="underline text-pine" onClick={()=>void navigator.clipboard.writeText(auth.profile!.id)}>Copy</button></p>}</div>
           </div>
           {auth.profileState==='syncing'&&<p role="status" className="info-banner">Creating or retrieving your Tourismo profile…</p>}
           {auth.profileState==='error'&&<div role="alert" className="error-banner flex-wrap"><span>Profile sync failed: {auth.profileError}</span><button className="underline font-bold" onClick={()=>{setError('');void auth.refreshProfile().catch(e=>setError(e instanceof Error?e.message:'Retry failed'))}}>Retry</button></div>}

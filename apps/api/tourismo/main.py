@@ -15,6 +15,8 @@ from tourismo.core.database import get_db
 from tourismo.geography.routes import router as destination_router
 from tourismo.trips.routes import router as trips_router
 from tourismo.identity.profile import router as identity_router
+from tourismo.admin.routes import router as admin_router
+from tourismo.vendors.routes import router as vendor_router, admin_router as vendor_admin_router
 
 settings = get_settings()
 _guest_rate_buckets: dict[str, deque[float]] = {}
@@ -48,7 +50,7 @@ app = FastAPI(title='Tourismo API', version='0.1.0',
               docs_url='/api/docs' if settings.app_environment != 'production' else None,
               redoc_url=None)
 app.add_middleware(CORSMiddleware, allow_origins=[x.strip() for x in settings.cors_origins.split(',')],
-                   allow_credentials=False, allow_methods=['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+                   allow_credentials=False, allow_methods=['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
                    allow_headers=['Authorization', 'Content-Type', 'X-Request-ID'])
 
 
@@ -94,6 +96,9 @@ def auth_config():
 app.include_router(identity_router)
 app.include_router(destination_router)
 app.include_router(trips_router)
+app.include_router(admin_router)
+app.include_router(vendor_router)
+app.include_router(vendor_admin_router)
 
 # Statically compiled React is served by this API container on Render.
 web_dist = Path(settings.web_dist_path)

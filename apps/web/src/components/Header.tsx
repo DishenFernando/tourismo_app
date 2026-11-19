@@ -1,9 +1,9 @@
-import { Compass, LogOut, Menu, Settings2, UserRound, X, ChevronDown } from 'lucide-react'
+import { Compass, LogOut, Menu, Settings2, UserRound, X, ChevronDown, ShieldCheck } from 'lucide-react'
 import { NavLink, Link } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
 import { useTourismoAuth } from '../app/Auth'
 
-const links = [{path:'/', name:'Home'}, {path:'/discover', name:'Discover'}, {path:'/plan',name:'Plan trip'}, {path:'/saved',name:'Saved trips'}]
+const links = [{path:'/', name:'Home'}, {path:'/discover', name:'Discover'}, {path:'/plan',name:'Plan trip'}, {path:'/saved',name:'Saved trips'}, {path:'/vendors',name:'For businesses'}]
 
 export function Header() {
   const [opened,setOpened] = useState(false)
@@ -45,6 +45,9 @@ export function Header() {
               <p className="px-4 pb-2 pt-3 text-xs text-ink/60 truncate">{auth.person?.email || 'Signed in to Tourismo'}</p>
               {auth.profileState==='error' && <p className="px-4 pb-2 text-xs text-red-600">Profile sync failed. Open profile to retry.</p>}
               <Link role="menuitem" onClick={()=>setMenuOpen(false)} to="/account" className="account-menu-item"><UserRound size={17}/> My profile {auth.profile&&!auth.profile.profile_completed&&<span className="text-xs text-amber-700">· Complete</span>}</Link>
+              {auth.profile?.roles.some(r=>r==='admin'||r==='editor') && <Link role="menuitem" to="/admin" onClick={()=>setMenuOpen(false)} className="account-menu-item"><ShieldCheck size={17}/> Content dashboard</Link>}
+              <Link role="menuitem" to="/vendors" onClick={()=>setMenuOpen(false)} className="account-menu-item"><ShieldCheck size={17}/> My businesses</Link>
+              {auth.profile?.roles.includes('admin') && <Link role="menuitem" to="/admin/vendors" onClick={()=>setMenuOpen(false)} className="account-menu-item"><ShieldCheck size={17}/> Vendor verification</Link>}
               <button role="menuitem" className="account-menu-item" onClick={()=>{setMenuOpen(false);auth.manageAccount()}}><Settings2 size={17}/> Sign-in & security</button>
               <button role="menuitem" className="account-menu-item text-red-700" onClick={()=>{setMenuOpen(false);void auth.logout()}}><LogOut size={17}/> Log out</button>
             </div>}
@@ -56,6 +59,9 @@ export function Header() {
     {opened && <nav aria-label="Mobile navigation" className="mobile-menu">
       {links.map(l=><NavLink key={l.path} onClick={()=>setOpened(false)} to={l.path} className="block py-3">{l.name}</NavLink>)}
       {auth.signedIn ? <>
+        {auth.profile?.roles.some(r=>r==='admin'||r==='editor') && <Link to="/admin" onClick={()=>setOpened(false)} className="block py-3">Content dashboard</Link>}
+        <Link to="/vendors" onClick={()=>setOpened(false)} className="block py-3">My businesses</Link>
+        {auth.profile?.roles.includes('admin') && <Link to="/admin/vendors" onClick={()=>setOpened(false)} className="block py-3">Vendor verification</Link>}
         <Link to="/account" onClick={()=>setOpened(false)} className="flex items-center gap-3 py-3">{accountPicture}<span>{auth.person?.name || 'My profile'}</span></Link>
         <button className="block py-3" onClick={()=>{setOpened(false);void auth.logout()}}>Log out</button>
       </> : <button className="text-left py-3" onClick={()=>{setOpened(false);login()}}>Log in / Sign up</button>}
