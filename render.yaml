@@ -1,0 +1,21 @@
+# Render demo blueprint. Create a Neon DB, configure the secret DATABASE_URL,
+# and build-time VITE_CLERK_PUBLISHABLE_KEY separately before real login testing.
+services:
+  - type: web
+    name: tourismo-demo
+    runtime: docker
+    plan: free
+    dockerfilePath: ./infra/Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/v1/health/ready
+    envVars:
+      - key: APP_ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: CLERK_ISSUER
+        sync: false
+      - key: CLERK_JWKS_URL
+        sync: false
+      - key: ALLOWED_AUTH_ORIGINS
+        sync: false

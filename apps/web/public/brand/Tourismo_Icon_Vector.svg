@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="380" height="355" viewBox="0 0 380 355" role="img" aria-label="Tourismo icon">
+<title>Tourismo icon</title><desc>Teal pin with mountain, orange sun and water waves.</desc>
+<defs>
+<linearGradient id="deepTeal" x1="0" y1="0" x2="1" y2="1">
+  <stop offset="0%" stop-color="#004E58"/>
+  <stop offset="100%" stop-color="#007E78"/>
+</linearGradient>
+<linearGradient id="hills" x1="0" y1="0" x2="1" y2="1">
+  <stop offset="0%" stop-color="#00515B"/>
+  <stop offset="58%" stop-color="#00776D"/>
+  <stop offset="100%" stop-color="#0D9D89"/>
+</linearGradient>
+<linearGradient id="sea" x1="0" y1="0" x2=".8" y2="1">
+  <stop offset="0%" stop-color="#008D7B"/>
+  <stop offset="100%" stop-color="#00746B"/>
+</linearGradient>
+</defs>
+<path id="destination-pin" d="M 190 22 C 123 22 72 74 72 140 C 72 216 119 276 190 325 C 261 276 308 216 308 140 C 308 74 257 22 190 22 Z M 190 48 C 135 48 98 90 98 141 C 98 163 102 177 108 190 L 143 157 Q 149 151 156 158 L 177 179 L 215 138 Q 224 129 232 138 L 255 164 Q 263 156 270 162 L 286 180 C 294 164 296 151 296 141 C 296 87 250 48 190 48 Z M 94 216 C 133 192 161 194 191 200 C 232 209 258 226 290 213 L 286 230 C 251 239 219 221 190 215 C 157 207 133 208 102 231 Z M 113 245 C 145 227 173 229 194 237 C 228 250 248 258 270 245 L 263 263 C 242 274 217 257 190 250 C 163 241 141 244 122 259 Z" fill-rule="evenodd" fill="url(#deepTeal)"/>
+<path id="mountains" d="M 93 202 L 142 157 Q 149 150 155 156 L 179 180 L 214 139 Q 223 130 231 139 L 256 168 L 267 160 Q 275 153 282 163 L 299 196 C 267 190 231 183 192 183 C 159 183 123 188 93 202 Z" fill="url(#hills)"/>
+<path id="water" d="M 90 207 C 124 187 161 182 194 187 C 239 194 270 201 294 203 C 277 255 232 297 190 325 C 148 297 107 251 90 207 Z M 94 216 C 133 192 161 194 191 200 C 232 209 258 226 290 213 L 286 230 C 251 239 219 221 190 215 C 157 207 133 208 102 231 Z M 113 245 C 145 227 173 229 194 237 C 228 250 248 258 270 245 L 263 263 C 242 274 217 257 190 250 C 163 241 141 244 122 259 Z" fill-rule="evenodd" fill="url(#sea)"/>
+<circle id="sun" cx="190" cy="106" r="21" fill="#FF970B"/>
+
+</svg>

@@ -1,0 +1,60 @@
+name: Tourismo foundation CI
+on:
+  push:
+  pull_request:
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r apps/api/requirements-dev.txt
+      - run: python -m pytest apps/api/tests -q
+        env:
+          PYTHONPATH: apps/api
+      - run: ruff check apps/api/tourismo apps/api/tests
+  postgres-migration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_DB: tourismo_test
+          POSTGRES_USER: tourismo
+          POSTGRES_PASSWORD: tourismo_dev
+        options: >-
+          --health-cmd "pg_isready -U tourismo -d tourismo_test"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements-dev.txt
+        working-directory: apps/api
+      - run: alembic upgrade head
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgresql+psycopg://tourismo:tourismo_dev@localhost:5432/tourismo_test
+      - run: python -m pytest tests/test_integration_postgres.py -q
+        working-directory: apps/api
+        env:
+          TEST_DATABASE_URL: postgresql+psycopg://tourismo:tourismo_dev@localhost:5432/tourismo_test
+          PYTHONPATH: .
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+        working-directory: apps/web
+      - run: npm run build
+        working-directory: apps/web
+      - run: npm test
+        working-directory: apps/web

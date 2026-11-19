@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="445" viewBox="0 0 1500 445" role="img" aria-label="Tourismo logo">
+<title>Tourismo</title>
+<desc>Tourismo wordmark with Sri Lankan-inspired teal destination pin, mountain, water waves and orange sun.</desc>
+<defs>
+<linearGradient id="deepTeal" x1="0" y1="0" x2="1" y2="1">
+  <stop offset="0%" stop-color="#004E58"/>
+  <stop offset="100%" stop-color="#007E78"/>
+</linearGradient>
+<linearGradient id="hills" x1="0" y1="0" x2="1" y2="1">
+  <stop offset="0%" stop-color="#00515B"/>
+  <stop offset="58%" stop-color="#00776D"/>
+  <stop offset="100%" stop-color="#0D9D89"/>
+</linearGradient>
+<linearGradient id="sea" x1="0" y1="0" x2=".8" y2="1">
+  <stop offset="0%" stop-color="#008D7B"/>
+  <stop offset="100%" stop-color="#00746B"/>
+</linearGradient>
+</defs>
+<g id="Tourismo-Symbol">
+<path id="destination-pin" d="M 190 22 C 123 22 72 74 72 140 C 72 216 119 276 190 325 C 261 276 308 216 308 140 C 308 74 257 22 190 22 Z M 190 48 C 135 48 98 90 98 141 C 98 163 102 177 108 190 L 143 157 Q 149 151 156 158 L 177 179 L 215 138 Q 224 129 232 138 L 255 164 Q 263 156 270 162 L 286 180 C 294 164 296 151 296 141 C 296 87 250 48 190 48 Z M 94 216 C 133 192 161 194 191 200 C 232 209 258 226 290 213 L 286 230 C 251 239 219 221 190 215 C 157 207 133 208 102 231 Z M 113 245 C 145 227 173 229 194 237 C 228 250 248 258 270 245 L 263 263 C 242 274 217 257 190 250 C 163 241 141 244 122 259 Z" fill-rule="evenodd" fill="url(#deepTeal)"/>
+<path id="mountains" d="M 93 202 L 142 157 Q 149 150 155 156 L 179 180 L 214 139 Q 223 130 231 139 L 256 168 L 267 160 Q 275 153 282 163 L 299 196 C 267 190 231 183 192 183 C 159 183 123 188 93 202 Z" fill="url(#hills)"/>
+<path id="water" d="M 90 207 C 124 187 161 182 194 187 C 239 194 270 201 294 203 C 277 255 232 297 190 325 C 148 297 107 251 90 207 Z M 94 216 C 133 192 161 194 191 200 C 232 209 258 226 290 213 L 286 230 C 251 239 219 221 190 215 C 157 207 133 208 102 231 Z M 113 245 C 145 227 173 229 194 237 C 228 250 248 258 270 245 L 263 263 C 242 274 217 257 190 250 C 163 241 141 244 122 259 Z" fill-rule="evenodd" fill="url(#sea)"/>
+<circle id="sun" cx="190" cy="106" r="21" fill="#FF970B"/>
+</g>
+<g id="Tourismo-Wordmark"><g transform="translate(351 228) scale(0.09863281 -0.09863281)" fill="#082B3C">
+<path transform="translate(0.00 0)" d="M40 1138H464V0H880V1138H1304V1490H40Z"/>
+<path transform="translate(1288.00 0)" d="M764 -24C1169 -24 1488 247 1488 744C1488 1242 1169 1514 764 1514C357 1514 40 1242 40 744C40 250 357 -24 764 -24ZM764 336C569 336 460 487 460 744C460 1002 569 1154 764 1154C960 1154 1068 1002 1068 744C1068 487 960 336 764 336Z"/>
+<path transform="translate(2760.00 0)" d="M722 -24C1111 -24 1364 194 1364 530V1490H960V564C960 425 862 326 722 326C584 326 484 426 484 564V1490H80V530C80 193 332 -24 722 -24Z"/>
+<path transform="translate(4148.00 0)" d="M80 0H496V466H682L905 0H1338L1065 556C1210 642 1292 785 1292 970C1292 1289 1069 1490 713 1490H80ZM496 788V1152H682C807 1152 886 1079 886 970C886 861 807 788 682 788Z"/>
+<path transform="translate(5455.00 0)" d="M496 1490H80V0H496Z"/>
+<path transform="translate(5975.00 0)" d="M704 -24C1108 -24 1339 154 1339 466C1339 704 1194 836 852 899L732 921C577 949 510 987 510 1058C510 1133 592 1186 709 1186C833 1186 916 1122 926 1018H1308C1298 1330 1073 1514 701 1514C339 1514 92 1321 92 1038C92 817 248 664 536 609L684 581C852 549 928 507 928 435C928 357 840 304 709 304C558 304 463 375 457 496H64C64 161 291 -24 704 -24Z"/>
+<path transform="translate(7322.00 0)" d="M80 0H488V576C488 672 480 863 475 1047C523 865 573 677 604 576L780 0H1116L1289 576C1320 681 1372 878 1419 1065C1415 876 1406 676 1406 576V0H1814V1490H1191L1059 1024C1030 923 986 750 948 597C910 750 865 923 836 1024L702 1490H80Z"/>
+<path transform="translate(9160.00 0)" d="M764 -24C1169 -24 1488 247 1488 744C1488 1242 1169 1514 764 1514C357 1514 40 1242 40 744C40 250 357 -24 764 -24ZM764 336C569 336 460 487 460 744C460 1002 569 1154 764 1154C960 1154 1068 1002 1068 744C1068 487 960 336 764 336Z"/>
+</g></g>
+<path id="orange-swoosh" d="M 660 277 C 842 232 1106 227 1390 258" fill="none" stroke="#FF9C0E" stroke-width="12" stroke-linecap="round"/>
+<text x="350" y="348" font-family="Inter, sans-serif" font-size="43" font-weight="500" font-style="italic" fill="#123C4B">Explore freely. Sign in when it matters.</text></svg>
