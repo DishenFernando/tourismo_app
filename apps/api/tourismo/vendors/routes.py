@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from tourismo.admin.permissions import require_admin
 from tourismo.core.database import get_db
 from tourismo.core.models import (
-    AuditEvent, User, VendorDocument, VendorEvidence, VendorMembership,
+    AuditEvent, ServiceListing, User, VendorDocument, VendorEvidence, VendorMembership,
     VendorOrganization, VendorVerificationCheck, now_utc,
 )
 from tourismo.identity.security import require_user, require_privileged_mfa
@@ -32,17 +32,27 @@ class VendorCreate(BaseModel):
     registration_no: str | None = Field(default=None, max_length=120)
     contact_email: str = Field(min_length=5, max_length=320)
     contact_phone: str | None = Field(default=None, max_length=40)
-    province: str = Field(min_length=2, max_length=120)
-    district: str = Field(min_length=2, max_length=120)
-    operating_address: str = Field(min_length=6, max_length=800)
+    province: str | None = Field(default=None, min_length=2, max_length=120)
+    district: str | None = Field(default=None, min_length=2, max_length=120)
+    operating_address: str | None = Field(default=None, min_length=6, max_length=800)
     license_no: str | None = Field(default=None, max_length=120)
 
-    @field_validator('business_name', 'province', 'district', 'operating_address')
+    @field_validator('business_name')
     @classmethod
     def clean_required(cls, value: str) -> str:
         value = value.strip()
         if len(value) < 2:
-            raise ValueError('Required field may not be blank')
+            raise ValueError('Business name may not be blank')
+        return value
+
+    @field_validator('province', 'district', 'operating_address')
+    @classmethod
+    def clean_later(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if len(value) < 2:
+            raise ValueError('Provided location details may not be blank')
         return value
 
     @field_validator('registration_no', 'license_no')
@@ -84,7 +94,7 @@ class VendorEdit(BaseModel):
     def validate_supplied_values(self):
         # Apply the same validation to changed fields as to initial applications.
         for key in self.model_fields_set:
-            if key in {'business_name', 'contact_email', 'province', 'district', 'operating_address'} and getattr(self, key) is None:
+            if key in {'business_name', 'contact_email'} and getattr(self, key) is None:
                 raise ValueError(f'{key} cannot be cleared')
         supplied = self.model_dump(exclude_unset=True)
         if supplied:
@@ -117,6 +127,22 @@ class MemberInvite(BaseModel):
     role: Literal['manager', 'staff']
 
 
+class MemberEmailInvite(BaseModel):
+    """Invite a previously authenticated account by its Clerk-verified email."""
+    model_config = ConfigDict(extra='forbid')
+    email: str = Field(min_length=5, max_length=320)
+    role: Literal['manager', 'staff']
+
+    @field_validator('email')
+    @classmethod
+    def clean_invitee_email(cls, value: str) -> str:
+        value = value.strip().lower()
+        if (value.count('@') != 1 or '.' not in value.rsplit('@', 1)[-1]
+                or any(character.isspace() for character in value)):
+            raise ValueError('Enter a valid Tourismo account email')
+        return value
+
+
 class VerificationDecision(BaseModel):
     model_config = ConfigDict(extra='forbid')
     decision: Literal['approved', 'rejected', 'changes_requested']
@@ -142,8 +168,16 @@ class VerificationDecision(BaseModel):
         return self
 
 
-def organization_dict(org: VendorOrganization) -> dict:
+def organization_dict(org: VendorOrganization, db: Session | None = None) -> dict:
     """Private response. Never include this representation in public listing APIs."""
+    published = False
+    if db and org.verification_state == 'approved':
+        expired = db.scalar(select(VendorEvidence.id).where(
+            VendorEvidence.organization_id == org.id, VendorEvidence.expires_on.is_not(None),
+            VendorEvidence.expires_on < date.today()).limit(1))
+        if not expired:
+            published = bool(db.scalar(select(ServiceListing.id).where(
+                ServiceListing.organization_id == org.id, ServiceListing.status == 'published').limit(1)))
     return dict(id=str(org.id), owner_id=str(org.owner_id), category=org.category,
         business_name=org.business_name, registration_no=org.registration_no,
         contact_email=org.contact_email, contact_phone=org.contact_phone,
@@ -153,7 +187,7 @@ def organization_dict(org: VendorOrganization) -> dict:
         review_feedback=org.review_feedback,
         created_at=org.created_at.isoformat() if org.created_at else None,
         # Explicitly avoid implying that approval starts paid access or publishes a listing.
-        has_public_listing=False, subscription_trial_started=False)
+        has_public_listing=published, subscription_trial_started=False)
 
 
 def evidence_dict(evidence: VendorEvidence) -> dict:
@@ -228,12 +262,12 @@ def list_organizations(user: User = Depends(require_user), db: Session = Depends
         VendorMembership.organization_id == VendorOrganization.id).where(
         VendorMembership.user_id == user.id, VendorMembership.state == 'active')
         .order_by(VendorOrganization.created_at.desc()).limit(100)).all()
-    return [organization_dict(org) for org in rows]
+    return [organization_dict(org, db) for org in rows]
 
 
 @router.get('/organizations/{org_id}')
 def read_organization(org_id: UUID, user: User = Depends(require_user), db: Session = Depends(get_db)):
-    return organization_dict(_organization(db, org_id, user))
+    return organization_dict(_organization(db, org_id, user), db)
 
 
 @router.patch('/organizations/{org_id}')
@@ -284,6 +318,8 @@ def add_evidence(org_id: UUID, body: EvidenceCreate, user: User = Depends(requir
 def submit_organization(org_id: UUID, user: User = Depends(require_user), db: Session = Depends(get_db)):
     org = _organization(db, org_id, user, ('owner','manager'))
     _editable(org)
+    if not (org.province and org.district and org.operating_address):
+        raise HTTPException(status_code=422, detail='Complete your province, district and operating address before verification')
     if not (org.registration_no or org.license_no):
         raise HTTPException(status_code=422, detail='Supply a registration or relevant license number')
     evidences = db.scalars(select(VendorEvidence).where(VendorEvidence.organization_id == org.id)).all()
@@ -329,6 +365,24 @@ def invite_member(org_id: UUID, body: MemberInvite, user: User = Depends(require
     _event(db,user,'vendor.member.invited',org)
     db.commit()
     return dict(id=str(membership.id), state='pending', role=membership.role)
+
+
+@router.post('/organizations/{org_id}/members/by-email', status_code=201)
+def invite_member_by_email(org_id: UUID, body: MemberEmailInvite,
+                           user: User = Depends(require_user), db: Session = Depends(get_db)):
+    """Private in-app invite by previously verified Clerk email; no email is sent.
+
+    Does not create an identity, grant a role, or allow use of an unverified
+    address typed into a browser. User must accept through their own session.
+    """
+    _organization(db, org_id, user, ('owner',))
+    matches = db.scalars(select(User).where(
+        func.lower(User.email) == body.email, User.status == 'active').limit(2)).all()
+    if not matches or not all(account.auth_subject.startswith('user_') for account in matches):
+        raise HTTPException(404, 'Invitee must first sign in to Tourismo with a verified email')
+    if len(matches) != 1:
+        raise HTTPException(409, 'Email cannot uniquely identify an account; contact support')
+    return invite_member(org_id, MemberInvite(user_id=matches[0].id, role=body.role), user, db)
 
 
 @router.get('/invitations')

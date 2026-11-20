@@ -43,7 +43,7 @@ export function Discover() {
           <span className="sample-chip">{d.is_sample?'Sample place':'Published guide'}</span>
         </div>
         <div className="p-5"><div className="text-xs text-pine font-bold tracking-widest uppercase flex items-center gap-1"><MapPin size={13}/>{d.district} District</div>
-          <h3 className="text-2xl font-bold mt-2">{d.title}</h3>{d.photo && <div className="mt-2 text-xs text-ink/60">Photo: {d.photo.photographer} · {d.photo.license_name}</div>}<p className="text-sm text-ink/55 mt-2">{d.summary}</p><div className="text-pine mt-5 font-semibold text-sm flex gap-2 items-center">Explore place <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform"/></div></div>
+          <h3 className="text-2xl font-bold mt-2">{d.title}</h3>{d.photo && <div className="mt-2 text-xs text-ink/60">{d.photo.media_kind==='ai_illustration'?`Illustrative AI image · ${d.photo.photographer} (not an actual site photograph)`:d.photo.media_kind==='owned_photo'?`Photo supplied by ${d.photo.photographer}`:`Photo: ${d.photo.photographer} · ${d.photo.license_name}`}</div>}<p className="text-sm text-ink/55 mt-2">{d.summary}</p><div className="text-pine mt-5 font-semibold text-sm flex gap-2 items-center">Explore place <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform"/></div></div>
       </Link>)}</div> : <div className="empty-state"><Compass size={35} className="text-pine"/><h3 className="text-xl font-bold mt-3">No matching place yet</h3><p className="text-ink/60">Try another town or district. We are expanding curated destination coverage.</p></div>}
     </>}
   </main>

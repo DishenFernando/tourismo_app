@@ -1,4 +1,4 @@
-export type DestinationPhoto = {image_url:string; file_page_url:string; photographer:string; license_name:string; license_url:string; alt_text:string}
+export type DestinationPhoto = {image_url:string; file_page_url:string; photographer:string; license_name:string; license_url:string; alt_text:string; media_kind?:'commons_photo'|'owned_photo'|'ai_illustration'}
 export type Destination = {
   slug: string; title: string; district: string; province: string;
   summary: string; content_status: string; is_sample: boolean; photo: DestinationPhoto|null
@@ -82,6 +82,24 @@ export const createAdminPoi = (slug:string, body:Record<string,string|number>, t
 export const publishAdminDestination = (slug:string, token:string) => request<{content_status:string}>(`/admin/destinations/${encodeURIComponent(slug)}/publish`,{method:'POST'},token)
 export const attachAdminPhoto = (slug:string, body:Record<string,string>, token:string) => request<{image_url:string}>(`/admin/destinations/${encodeURIComponent(slug)}/photos`,{method:'POST',body:JSON.stringify(body)},token)
 
+export async function uploadAdminDestinationImage(slug:string, file:File, kind:'owned_photo'|'ai_illustration', creator:string, altText:string, token:string):Promise<{image_url:string;media_kind:string}> {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('kind', kind)
+  form.append('creator', creator)
+  form.append('alt_text', altText)
+  form.append('rights_confirmed', 'true')
+  const response = await fetch(`/api/v1/admin/destinations/${encodeURIComponent(slug)}/photos/upload`, {
+    method:'POST', headers:{Authorization:`Bearer ${token}`}, body:form
+  })
+  if (!response.ok) {
+    let detail = `Upload failed (${response.status})`
+    try {const payload = await response.json(); if (typeof payload.detail === 'string') detail = payload.detail} catch { /* non-JSON error */ }
+    throw new Error(detail)
+  }
+  return response.json()
+}
+
 export type AdminPoi = {slug:string;title:string;content_status:string;has_source:boolean;latitude:number|null;longitude:number|null}
 export const listAdminPois=(slug:string,token:string)=>request<AdminPoi[]>(`/admin/destinations/${encodeURIComponent(slug)}/pois`,{},token)
 export const publishAdminPoi=(slug:string,poi:string,token:string)=>request<{content_status:string}>(`/admin/destinations/${encodeURIComponent(slug)}/pois/${encodeURIComponent(poi)}/publish`,{method:'POST'},token)
@@ -112,14 +130,14 @@ export type VendorState = 'draft'|'submitted'|'changes_requested'|'approved'|'re
 export type VendorOrganization = {
   id:string; owner_id:string; category:VendorCategory; business_name:string;
   registration_no:string|null; contact_email:string; contact_phone:string|null;
-  province:string; district:string; operating_address:string; license_no:string|null;
+  province:string|null; district:string|null; operating_address:string|null; license_no:string|null;
   verification_state:VendorState; reviewed_at:string|null; review_feedback:string|null; created_at:string|null;
   has_public_listing:boolean; subscription_trial_started:boolean
 }
 export type VendorApplication = {
   category:VendorCategory; business_name:string; registration_no:string|null;
-  contact_email:string; contact_phone:string|null; province:string; district:string;
-  operating_address:string; license_no:string|null
+  contact_email:string; contact_phone:string|null; province:string|null; district:string|null;
+  operating_address:string|null; license_no:string|null
 }
 export type VendorEvidence = {
   id:string; evidence_type:'business_registration'|'tourism_license'|'professional_license'|'other_permit';
@@ -136,6 +154,7 @@ export const vendorEvidence = (id:string,token:string)=>request<VendorEvidence[]
 export const addVendorEvidence = (id:string,body:Omit<VendorEvidence,'id'>,token:string)=>request<VendorEvidence>(`/vendor/organizations/${id}/evidence`,{method:'POST',body:JSON.stringify(body)},token)
 export const submitVendorOrganization = (id:string,token:string)=>request<VendorOrganization>(`/vendor/organizations/${id}/submit`,{method:'POST'},token)
 export const vendorMembers = (id:string,token:string)=>request<VendorMember[]>(`/vendor/organizations/${id}/members`,{},token)
+export const inviteVendorMemberByEmail = (id:string,email:string,role:'manager'|'staff',token:string)=>request<{id:string;state:string}>(`/vendor/organizations/${id}/members/by-email`,{method:'POST',body:JSON.stringify({email,role})},token)
 export const inviteVendorMember = (id:string,user_id:string,role:'manager'|'staff',token:string)=>request<{id:string;state:string}>(`/vendor/organizations/${id}/members`,{method:'POST',body:JSON.stringify({user_id,role})},token)
 export const vendorInvitations = (token:string)=>request<VendorInvitation[]>('/vendor/invitations',{},token)
 export const acceptVendorInvitation = (id:string,token:string)=>request<{state:string}>(`/vendor/invitations/${id}/accept`,{method:'POST'},token)
@@ -153,6 +172,16 @@ export type VendorCompliance = {verification_state:VendorState;expired_evidence_
 export const vendorDocuments=(orgId:string,token:string)=>request<VendorDocument[]>(`/vendor/organizations/${orgId}/documents`,{},token)
 export const vendorCompliance=(orgId:string,token:string)=>request<VendorCompliance>(`/vendor/organizations/${orgId}/compliance`,{},token)
 export const startVendorRenewal=(orgId:string,token:string)=>request<VendorOrganization>(`/vendor/organizations/${orgId}/start-renewal`,{method:'POST'},token)
+export async function uploadServiceListingPhoto(orgId:string,listingId:string,file:File,creator:string,altText:string,token:string):Promise<ListingPhotoWrite> {
+  const form=new FormData()
+  form.append('file',file);form.append('creator',creator);form.append('alt_text',altText);form.append('rights_confirmed','true')
+  const res=await fetch(`/api/v1/vendor/organizations/${orgId}/listings/${listingId}/photos/upload`,{
+    method:'POST',headers:{Authorization:`Bearer ${token}`},body:form
+  })
+  if(!res.ok){const body=await res.json().catch(()=>({}));throw new Error(typeof body.detail==='string'?body.detail:`Upload failed (${res.status})`)}
+  return res.json()
+}
+
 export async function uploadVendorDocument(orgId:string,evidenceId:string,file:File,token:string):Promise<VendorDocument> {
   const form = new FormData();form.append('evidence_id',evidenceId);form.append('file',file)
   const response=await fetch(`/api/v1/vendor/organizations/${orgId}/documents`,{
@@ -175,3 +204,84 @@ export async function downloadVendorDocument(orgId:string,docId:string,token:str
   try {const link=document.createElement('a');link.href=url;link.download='tourismo-vendor-evidence';link.click()}
   finally {window.setTimeout(()=>URL.revokeObjectURL(url),10000)}
 }
+
+// Phase 4.1 — service discovery is separate from private vendor verification.
+export type ListingPhoto = {
+  id:string; image_url:string; source_url:string; credit:string;
+  license_name:string; license_url:string; alt_text:string
+}
+export type ListingCategory = VendorCategory
+export type ListingStatus = 'draft'|'submitted'|'changes_requested'|'published'|'archived'
+export type ServiceListing = {
+  id:string; slug:string; category:ListingCategory; title:string; summary:string;
+  description:string; province:string; district:string; details:Record<string,unknown>;
+  public_email:string|null; public_phone:string|null; photos:ListingPhoto[];
+  latitude:number|null; longitude:number|null; location_source_url:string|null; location_note:string|null;
+  status:ListingStatus; prices_are_indicative:boolean; booking_available:false;
+  organization_id?:string; review_feedback?:string|null; published_at?:string|null;
+  revision?:ListingRevision|null;
+  is_demo?:boolean; demo_disclaimer?:string; distance_km?:number
+}
+export type ListingWrite = Pick<ServiceListing,'title'|'summary'|'description'|'public_email'|'public_phone'|'details'> & {
+  latitude?:number|null; longitude?:number|null; location_source_url?:string|null; location_note?:string|null
+}
+export type ListingRevisionWrite = ListingWrite & {photos?:ListingPhotoWrite[]}
+export type ListingRevision = {
+  id:string; listing_id:string; status:'draft'|'submitted'|'changes_requested'|'approved';
+  snapshot:ListingRevisionWrite; review_feedback:string|null; created_at:string|null;
+  live_title?:string; organization_id?:string
+}
+export type FamilyFit = {adults:number;child_ages:number[];any_room_may_fit:boolean;
+  rooms:{room_name:string;may_fit:boolean;age_policy_specified:boolean;max_adults:number;max_children:number}[];disclaimer:string}
+
+export type ListingPhotoWrite = Omit<ListingPhoto,'id'>
+export type PublicListingFilters = {
+  category?:string; province?:string; district?:string; destination?:string; q?:string;
+  adults?:number; child_ages?:number[]; near_lat?:number; near_lon?:number;
+  radius_km?:number; sort?:'recent'|'distance'; limit?:number; offset?:number;
+}
+export const publicListings=(options:PublicListingFilters={})=>{
+  const p=new URLSearchParams()
+  Object.entries(options).forEach(([k,v])=>{
+    if(Array.isArray(v))v.forEach(age=>p.append(k,String(age)))
+    else if(v!==undefined&&v!==null&&v!=='')p.set(k,String(v))
+  })
+  return request<ServiceListing[]>(`/listings?${p.toString()}`)
+}
+export const publicListing=(slug:string)=>request<ServiceListing>(`/listings/${encodeURIComponent(slug)}`)
+// These endpoints are permanently disabled outside a development environment.
+export const demoCatalogStatus=()=>request<{enabled:boolean}>('/demo/status')
+export const demoListings=(options:Pick<PublicListingFilters,'category'|'province'|'district'|'destination'|'q'|'adults'|'child_ages'>={})=>{
+  const p=new URLSearchParams()
+  Object.entries(options).forEach(([k,v])=>{
+    if(Array.isArray(v))v.forEach(age=>p.append(k,String(age)))
+    else if(v!==undefined&&v!==null&&v!=='')p.set(k,String(v))
+  })
+  return request<ServiceListing[]>(`/demo/listings?${p.toString()}`)
+}
+export const demoListing=(slug:string)=>request<ServiceListing>(`/demo/listings/${encodeURIComponent(slug)}`)
+export const myServiceListings=(orgId:string,token:string)=>request<ServiceListing[]>(`/vendor/organizations/${orgId}/listings`,{},token)
+export const quickStartServiceListing=(orgId:string,title:string,token:string)=>request<ServiceListing>(`/vendor/organizations/${orgId}/listings/quick-start`,{method:'POST',body:JSON.stringify({title})},token)
+export const createServiceListing=(orgId:string,body:ListingWrite,token:string)=>request<ServiceListing>(`/vendor/organizations/${orgId}/listings`,{method:'POST',body:JSON.stringify(body)},token)
+export const updateServiceListing=(orgId:string,id:string,body:ListingWrite,token:string)=>request<ServiceListing>(`/vendor/organizations/${orgId}/listings/${id}`,{method:'PUT',body:JSON.stringify(body)},token)
+export const addServicePhoto=(orgId:string,id:string,body:ListingPhotoWrite,token:string)=>request<ListingPhoto>(`/vendor/organizations/${orgId}/listings/${id}/photos`,{method:'POST',body:JSON.stringify(body)},token)
+export const removeServicePhoto=(orgId:string,id:string,photoId:string,token:string)=>request<{removed:boolean}>(`/vendor/organizations/${orgId}/listings/${id}/photos/${photoId}`,{method:'DELETE'},token)
+export const submitServiceListing=(orgId:string,id:string,token:string)=>request<ServiceListing>(`/vendor/organizations/${orgId}/listings/${id}/submit`,{method:'POST'},token)
+export const archiveServiceListing=(orgId:string,id:string,token:string)=>request<ServiceListing>(`/vendor/organizations/${orgId}/listings/${id}/archive`,{method:'POST'},token)
+export const listingReviewQueue=(token:string,status:'submitted'|'published'|'changes_requested'='submitted')=>request<ServiceListing[]>(`/admin/listings?status=${status}`,{},token)
+export const decideServiceListing=(id:string,decision:'published'|'changes_requested',reason:string,token:string)=>request<ServiceListing>(`/admin/listings/${id}/decision`,{method:'POST',body:JSON.stringify({decision,reason})},token)
+
+// Phase 4.2: safe published-listing revisions and non-booking family guidance.
+export const familySuitability=(slug:string,adults:number,ages:number[])=>{
+  const params=new URLSearchParams({adults:String(adults)});
+  ages.forEach(a=>params.append('child_ages',String(a)));
+  return request<FamilyFit>(`/listings/${encodeURIComponent(slug)}/family-fit?${params}`)
+}
+export const saveListingRevision=(orgId:string,id:string,body:ListingRevisionWrite,token:string)=>
+  request<ListingRevision>(`/vendor/organizations/${orgId}/listings/${id}/revisions`,{method:'POST',body:JSON.stringify(body)},token)
+export const submitListingRevision=(orgId:string,id:string,token:string)=>
+  request<ListingRevision>(`/vendor/organizations/${orgId}/listings/${id}/revisions/submit`,{method:'POST'},token)
+export const submittedListingRevisions=(token:string)=>
+  request<ListingRevision[]>('/admin/listings/revisions',{},token)
+export const decideListingRevision=(id:string,decision:'approved'|'changes_requested',reason:string,token:string)=>
+  request<ListingRevision>(`/admin/listings/revisions/${id}/decision`,{method:'POST',body:JSON.stringify({decision,reason})},token)

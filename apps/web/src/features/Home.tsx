@@ -4,9 +4,9 @@ import { Link, useNavigate } from 'react-router-dom'
 
 const features = [
   { icon:MapPinned, name:'Destinations', description:'Get to know the places that make Sri Lanka unforgettable.', path:'/discover'},
-  { icon:BedDouble, name:'Places to stay', description:'Family-friendly stays and verified rooms. Coming in later phases.', path:'/discover?category=stays'},
-  { icon:UtensilsCrossed, name:'Food & dining', description:'Local flavours, dietary choices, and restaurants. Coming soon.', path:'/discover?category=food'},
-  { icon:BusFront, name:'Getting around', description:'Compare how to travel, with source-backed information as it launches.', path:'/discover?category=transport'},
+  { icon:BedDouble, name:'Places to stay', description:'Browse independently approved accommodation listings as they become available.', path:'/listings?category=accommodation'},
+  { icon:UtensilsCrossed, name:'Food & dining', description:'Explore published dining profiles and indicative menus.', path:'/listings?category=restaurant'},
+  { icon:BusFront, name:'Getting around', description:'Discover published transport providers and vehicle types.', path:'/listings?category=transport'},
 ]
 export function Home() {
   const [search, setSearch] = useState('')

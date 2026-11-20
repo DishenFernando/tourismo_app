@@ -2,7 +2,7 @@ from datetime import datetime, date, timezone
 import uuid
 from sqlalchemy import (
     BigInteger, Boolean, CheckConstraint, Date, DateTime, ForeignKey,
-    Index, Integer, Float, String, Text, UniqueConstraint,
+    Index, Integer, Float, LargeBinary, String, Text, UniqueConstraint,
 )
 from tourismo.core.geo import Geography
 from sqlalchemy.dialects.postgresql import UUID, JSONB
@@ -201,8 +201,19 @@ class DestinationPhoto(Base):
     license_url: Mapped[str] = mapped_column(String(512), nullable=False)
     alt_text: Mapped[str] = mapped_column(String(240), nullable=False)
     is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    media_kind: Mapped[str] = mapped_column(String(24), nullable=False, default='commons_photo')
     destination: Mapped[Destination] = relationship(back_populates='photos')
     __table_args__ = (UniqueConstraint('destination_id', 'file_page_url', name='uq_destination_photo_file'),)
+
+
+class DestinationImageBlob(Base):
+    """Small local-development images; production should migrate to managed object storage."""
+    __tablename__ = 'destination_image_blobs'
+    photo_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('destination_photos.id', ondelete='CASCADE'), primary_key=True)
+    content_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    data: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
 
 class VendorOrganization(Base):
@@ -215,9 +226,9 @@ class VendorOrganization(Base):
     registration_no: Mapped[str | None] = mapped_column(String(120), unique=True)
     contact_email: Mapped[str] = mapped_column(String(320), nullable=False)
     contact_phone: Mapped[str | None] = mapped_column(String(40))
-    province: Mapped[str] = mapped_column(String(120), nullable=False)
-    district: Mapped[str] = mapped_column(String(120), nullable=False)
-    operating_address: Mapped[str] = mapped_column(Text, nullable=False)
+    province: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    district: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    operating_address: Mapped[str | None] = mapped_column(Text, nullable=True)
     license_no: Mapped[str | None] = mapped_column(String(120))
     verification_state: Mapped[str] = mapped_column(String(24), nullable=False, default='draft', index=True)
     reviewer_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey('users.id'))
@@ -292,3 +303,91 @@ class VendorDocument(Base):
         CheckConstraint("scan_state IN ('pending_scan','clean','infected')", name='ck_vendor_document_scan'),
         CheckConstraint('size_bytes > 0 AND size_bytes <= 5242880', name='ck_vendor_document_size'),
     )
+
+
+class ServiceListing(Base):
+    """A business-owned offer; only independently published listings are public."""
+    __tablename__ = 'service_listings'
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('vendor_organizations.id', ondelete='RESTRICT'), nullable=False, index=True)
+    slug: Mapped[str] = mapped_column(String(150), nullable=False, unique=True)
+    category: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(160), nullable=False)
+    summary: Mapped[str] = mapped_column(String(350), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    province: Mapped[str] = mapped_column(String(120), nullable=False)
+    district: Mapped[str] = mapped_column(String(120), nullable=False)
+    public_email: Mapped[str | None] = mapped_column(String(320))
+    public_phone: Mapped[str | None] = mapped_column(String(40))
+    details: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    latitude: Mapped[float | None] = mapped_column(Float)
+    longitude: Mapped[float | None] = mapped_column(Float)
+    location_source_url: Mapped[str | None] = mapped_column(String(2048))
+    location_note: Mapped[str | None] = mapped_column(String(250))
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default='draft', index=True)
+    review_feedback: Mapped[str | None] = mapped_column(String(600))
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+    photos: Mapped[list['ServiceListingPhoto']] = relationship(back_populates='listing', lazy='selectin', order_by='ServiceListingPhoto.created_at', cascade='all, delete-orphan')
+    revisions: Mapped[list['ServiceListingRevision']] = relationship(back_populates='listing', lazy='selectin', order_by='ServiceListingRevision.created_at')
+    __table_args__ = (
+        CheckConstraint("category IN ('accommodation','restaurant','guide','transport','tour_operator','activity')", name='ck_service_listing_category'),
+        CheckConstraint("status IN ('draft','submitted','changes_requested','published','archived')", name='ck_service_listing_status'),
+    )
+
+
+class ServiceListingPhoto(Base):
+    """Credited HTTPS media only; never an image of a different business."""
+    __tablename__ = 'service_listing_photos'
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
+    listing_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('service_listings.id', ondelete='CASCADE'), nullable=False, index=True)
+    image_url: Mapped[str] = mapped_column(String(2048), nullable=False)
+    source_url: Mapped[str] = mapped_column(String(2048), nullable=False)
+    credit: Mapped[str] = mapped_column(String(160), nullable=False)
+    license_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    license_url: Mapped[str] = mapped_column(String(2048), nullable=False)
+    alt_text: Mapped[str] = mapped_column(String(240), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    listing: Mapped[ServiceListing] = relationship(back_populates='photos')
+    __table_args__ = (UniqueConstraint('listing_id', 'source_url', name='uq_service_listing_photo_source'),)
+
+
+class ServiceListingImageBlob(Base):
+    """Sanitized developer-uploaded listing photograph, stored against its photo record."""
+    __tablename__ = 'service_listing_image_blobs'
+    photo_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey('service_listing_photos.id', ondelete='CASCADE'), primary_key=True)
+    content_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    data: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class ServiceListingReview(Base):
+    """Durable independent publication decisions; no implicit business verification."""
+    __tablename__ = 'service_listing_reviews'
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
+    listing_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('service_listings.id', ondelete='CASCADE'), nullable=False, index=True)
+    reviewer_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id', ondelete='RESTRICT'), nullable=False)
+    decision: Mapped[str] = mapped_column(String(24), nullable=False)
+    reason: Mapped[str] = mapped_column(String(600), nullable=False)
+    reviewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    __table_args__ = (CheckConstraint("decision IN ('published','changes_requested')", name='ck_listing_review_decision'),)
+
+
+class ServiceListingRevision(Base):
+    """Private proposed replacement; never changes public listing before independent approval."""
+    __tablename__ = 'service_listing_revisions'
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
+    listing_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('service_listings.id', ondelete='CASCADE'), nullable=False, index=True)
+    author_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id', ondelete='RESTRICT'), nullable=False)
+    reviewer_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey('users.id', ondelete='RESTRICT'))
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default='draft')
+    snapshot: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    review_feedback: Mapped[str | None] = mapped_column(String(600))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    listing: Mapped[ServiceListing] = relationship(back_populates='revisions')
+    __table_args__ = (CheckConstraint("status IN ('draft','submitted','changes_requested','approved')", name='ck_service_listing_revision_status'),)

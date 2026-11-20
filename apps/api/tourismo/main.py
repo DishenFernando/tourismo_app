@@ -18,6 +18,10 @@ from tourismo.identity.profile import router as identity_router
 from tourismo.admin.routes import router as admin_router
 from tourismo.vendors.routes import router as vendor_router, admin_router as vendor_admin_router
 from tourismo.vendors.documents import router as vendor_documents_router, admin_router as vendor_documents_admin_router
+from tourismo.listings.routes import public_router as listings_public_router, vendor_router as listings_vendor_router, admin_router as listings_admin_router
+from tourismo.listings.media import vendor_router as listing_media_vendor_router, public_router as listing_media_public_router
+from tourismo.demo.routes import router as demo_router
+from tourismo.admin.media import admin_router as media_admin_router, public_router as media_public_router
 
 settings = get_settings()
 _guest_rate_buckets: dict[str, deque[float]] = {}
@@ -29,7 +33,7 @@ def over_guest_limit(request: Request) -> bool:
 
     Production must also use a shared edge/Redis-level limiter across replicas.
     """
-    if request.url.path not in ('/api/v1/trips/preview', '/api/v1/destinations'):
+    if request.url.path not in ('/api/v1/trips/preview', '/api/v1/destinations', '/api/v1/listings'):
         return False
     remote = request.client.host if request.client else 'unknown'
     key = f'{remote}:{request.url.path}'
@@ -95,6 +99,8 @@ def auth_config():
 
 
 app.include_router(identity_router)
+app.include_router(media_admin_router)
+app.include_router(media_public_router)
 app.include_router(destination_router)
 app.include_router(trips_router)
 app.include_router(admin_router)
@@ -102,6 +108,12 @@ app.include_router(vendor_router)
 app.include_router(vendor_admin_router)
 app.include_router(vendor_documents_router)
 app.include_router(vendor_documents_admin_router)
+app.include_router(listings_public_router)
+app.include_router(listings_vendor_router)
+app.include_router(listings_admin_router)
+app.include_router(listing_media_vendor_router)
+app.include_router(listing_media_public_router)
+app.include_router(demo_router)
 
 # Statically compiled React is served by this API container on Render.
 web_dist = Path(settings.web_dist_path)

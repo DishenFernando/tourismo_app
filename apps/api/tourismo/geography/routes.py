@@ -15,6 +15,7 @@ class PhotoResponse(BaseModel):
     license_name: str
     license_url: str
     alt_text: str
+    media_kind: str = 'commons_photo'
 
 
 class DestinationResponse(BaseModel):
@@ -36,7 +37,7 @@ def shape(row: Destination, locale: str = 'en') -> DestinationResponse:
     main_photo = next((item for item in images if item.is_primary), None)
     photo = PhotoResponse(image_url=main_photo.image_url, file_page_url=main_photo.file_page_url,
                           photographer=main_photo.photographer, license_name=main_photo.license_name,
-                          license_url=main_photo.license_url, alt_text=main_photo.alt_text) if main_photo else None
+                          license_url=main_photo.license_url, alt_text=main_photo.alt_text, media_kind=getattr(main_photo, 'media_kind', 'commons_photo')) if main_photo else None
     return DestinationResponse(photo=photo, slug=row.slug, title=translation.title if translation else row.slug,
                                district=row.district, province=row.province,
                                summary=translation.summary if translation else '',
@@ -171,5 +172,5 @@ def destination_photos(slug: str, db: Session = Depends(get_db)):
     place = _public_destination(slug, db)
     return [PhotoResponse(image_url=photo.image_url, file_page_url=photo.file_page_url,
                           photographer=photo.photographer, license_name=photo.license_name,
-                          license_url=photo.license_url, alt_text=photo.alt_text)
+                          license_url=photo.license_url, alt_text=photo.alt_text, media_kind=getattr(photo, 'media_kind', 'commons_photo'))
             for photo in sorted(place.photos, key=lambda item: (not item.is_primary, item.file_page_url))]

@@ -266,7 +266,7 @@ def add_photo(slug: str, data: PhotoCreate, db: Session = Depends(get_db),
                              file_page_url=link, photographer=data.photographer,
                              license_name=data.license_name,
                              license_url='https://creativecommons.org/licenses/'+license_path,
-                             alt_text=data.alt_text, is_primary=True)
+                             alt_text=data.alt_text, is_primary=True, media_kind='commons_photo')
     try:
         for existing in place.photos:
             existing.is_primary = False

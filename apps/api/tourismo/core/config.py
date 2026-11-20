@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     clerk_audience: str = ''
     allowed_auth_origins: str = 'http://localhost:5173,http://localhost:8000'
     enable_phone_otp: bool = False
+    enable_demo_catalog: bool = False  # Local development only; never a publishing bypass
     cors_origins: str = 'http://localhost:5173'
     web_dist_path: str = '/app/web-dist'
     vendor_document_dir: str = '/app/private_vendor_documents'

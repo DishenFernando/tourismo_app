@@ -76,6 +76,7 @@ export function DestinationPage() {
           <p className="lead">{guide?.overview || destination.summary}</p>
           <div className="flex flex-wrap gap-3 items-center mt-6">
             <button className="btn-primary" onClick={()=>navigate(`/plan?destination=${encodeURIComponent(destination.slug)}`)}>Plan a trip here <ArrowRight size={18}/></button>
+            <Link className="btn-secondary" to={`/listings?destination=${encodeURIComponent(destination.slug)}`}>Find services in this region <MapPin size={17}/></Link>
             <label className="flex items-center gap-2 text-sm font-semibold text-ink/70"><Languages size={17}/><span>Content language</span>
               <select className="rounded-lg border border-ink/15 bg-white px-3 py-2" aria-label="Guide language" value={locale}
                 onChange={e=>setParams(e.target.value==='en'?{}:{locale:e.target.value})}>
@@ -91,12 +92,12 @@ export function DestinationPage() {
             {(photos[selectedPhoto] || destination.photo) ? <>
               <img src={(photos[selectedPhoto] || destination.photo)!.image_url} loading="eager" alt={(photos[selectedPhoto] || destination.photo)!.alt_text} referrerPolicy="no-referrer" className="relative z-[1] w-full h-full object-cover" onError={e=>{e.currentTarget.style.display='none'}}/>
               <div className="absolute bottom-0 left-0 right-0 z-[2] bg-[#062735c9] p-3 text-white text-xs">
-                Photo by {(photos[selectedPhoto] || destination.photo)!.photographer} · <a target="_blank" rel="noopener noreferrer" className="underline" href={(photos[selectedPhoto] || destination.photo)!.file_page_url}>Wikimedia Commons</a> · <a target="_blank" rel="noopener noreferrer" className="underline" href={(photos[selectedPhoto] || destination.photo)!.license_url}>{(photos[selectedPhoto] || destination.photo)!.license_name}</a>
+                {(photos[selectedPhoto] || destination.photo)!.media_kind==='ai_illustration'?<span><b>Illustrative AI-generated image</b> · Generated with {(photos[selectedPhoto] || destination.photo)!.photographer} · Not a documentary photograph of this location</span>:(photos[selectedPhoto] || destination.photo)!.media_kind==='owned_photo'?<span>Photo provided by {(photos[selectedPhoto] || destination.photo)!.photographer} · Rights asserted by uploader (not independently verified)</span>:<span>Photo by {(photos[selectedPhoto] || destination.photo)!.photographer} · <a target="_blank" rel="noopener noreferrer" className="underline" href={(photos[selectedPhoto] || destination.photo)!.file_page_url}>Wikimedia Commons</a> · <a target="_blank" rel="noopener noreferrer" className="underline" href={(photos[selectedPhoto] || destination.photo)!.license_url}>{(photos[selectedPhoto] || destination.photo)!.license_name}</a></span>}
               </div>
             </> : <><div className="destination-sun"/><div className="destination-ridge"/><div className="destination-ridge front"/><span className="sample-chip">Illustration · photograph awaiting review</span></>}
           </div>
           {photos.length > 1 && <div className="mt-3 flex gap-2 flex-wrap" aria-label="Destination photo gallery">{photos.map((photo,index)=><button key={photo.file_page_url} type="button" onClick={()=>setSelectedPhoto(index)} aria-label={`Show photograph ${index+1}: ${photo.alt_text}`} aria-pressed={selectedPhoto===index} className={`h-16 w-20 overflow-hidden rounded-lg border-2 ${selectedPhoto===index?'border-pine':'border-transparent'}`}><img src={photo.image_url} alt="" loading="lazy" referrerPolicy="no-referrer" className="w-full h-full object-cover"/></button>)}</div>}
-          {photos.length > 0 && <p className="mt-2 text-xs text-ink/55">{photos.length} credited {photos.length===1?'photo':'photos'} · Select a thumbnail to view the original with creator and license details.</p>}
+          {photos.length > 0 && <p className="mt-2 text-xs text-ink/55">{photos.length} images · Credits and AI-image labels are shown for each item. Not all images are documentary photographs.</p>}
         </div>
       </div>
 
