@@ -1,25 +1,33 @@
 export type DestinationPhoto = {image_url:string; file_page_url:string; photographer:string; license_name:string; license_url:string; alt_text:string; media_kind?:'commons_photo'|'owned_photo'|'ai_illustration'}
 export type Destination = {
   slug: string; title: string; district: string; province: string;
-  summary: string; content_status: string; is_sample: boolean; photo: DestinationPhoto|null
+  summary: string; content_status: string; is_sample: boolean; photo: DestinationPhoto|null; location_source_url?:string|null
 }
 export type BudgetCategory = 'accommodation'|'transport'|'food'|'entry_fees'|'guides'|'activities'|'misc'|'contingency'
 export type BudgetItem = {
   category: BudgetCategory; description: string; minimum_minor: number;
-  expected_minor: number; maximum_minor: number; is_confirmed: boolean; source_label: string
+  expected_minor: number; maximum_minor: number; is_confirmed: boolean; source_label: string; day?: number|null
 }
-export type Stop = { day: number; title: string; note: string }
+export type Stop = { day: number; title: string; note: string; place_id?: string|null }
 export type TripDraft = {
   client_draft_id: string;
   destination_slug: string; title: string; start_date: string|null; end_date: string|null;
   adults: number; children_ages: number[]; currency: 'LKR'; budget_limit_minor: number|null;
   budget_flexible: boolean; budget_items: BudgetItem[]; itinerary: Stop[]
 }
+export type BudgetSubtotal = {minimum_minor:number; expected_minor:number; maximum_minor:number}
+export type CategorySubtotal = BudgetSubtotal & {category:BudgetCategory}
+export type DaySubtotal = BudgetSubtotal & {day:number}
 export type TripPreview = {
   minimum_minor: number; expected_minor: number; maximum_minor: number;
-  remaining_minor: number|null; exceeds_limit: boolean; currency: string; estimated_not_quoted: boolean
+  remaining_minor: number|null; exceeds_limit: boolean; currency: string; estimated_not_quoted: boolean;
+  per_traveler_expected_minor: number; by_category:CategorySubtotal[]; by_day:DaySubtotal[]; unassigned:BudgetSubtotal
 }
-export type SavedTrip = { id: string; draft: TripDraft; preview: TripPreview }
+export type SavedTrip = { id: string; version: number; draft: TripDraft; preview: TripPreview }
+
+export class ApiError extends Error {
+  constructor(message:string, public readonly status:number) {super(message);this.name='ApiError'}
+}
 
 export async function request<T>(path: string, options: RequestInit = {}, token?: string|null): Promise<T> {
   const response = await fetch(`/api/v1${path}`, {
@@ -31,7 +39,7 @@ export async function request<T>(path: string, options: RequestInit = {}, token?
     let message = `Request failed (${response.status})`
     try { const body = await response.json(); message = typeof body.detail === 'string' ? body.detail : message }
     catch { /* transport error without JSON body */ }
-    throw new Error(message)
+    throw new ApiError(message, response.status)
   }
   return response.json() as Promise<T>
 }
@@ -40,6 +48,14 @@ export const getDestinations = (query = '') => request<Destination[]>(`/destinat
 export const previewTrip = (draft: TripDraft) => request<TripPreview>('/trips/preview', {method:'POST', body:JSON.stringify(draft)})
 export const saveTrip = (draft: TripDraft, token: string) => request<SavedTrip>('/trips', {method:'POST', body:JSON.stringify(draft)}, token)
 export const savedTrips = (token: string) => request<SavedTrip[]>('/trips', {}, token)
+export const savedTrip = (id:string, token:string) => request<SavedTrip>(`/trips/${encodeURIComponent(id)}`, {}, token)
+export const deleteSavedTrip = async (id:string, token:string):Promise<void> => {
+  const response=await fetch(`/api/v1/trips/${encodeURIComponent(id)}`,{method:'DELETE',headers:{Authorization:`Bearer ${token}`}})
+  if(!response.ok)throw new ApiError('Unable to delete trip',response.status)
+}
+export const updateSavedTrip = (id:string, expectedVersion:number, draft:TripDraft, token:string) =>
+  request<SavedTrip>(`/trips/${encodeURIComponent(id)}`,
+    {method:'PATCH', body:JSON.stringify({expected_version:expectedVersion, draft})}, token)
 
 export type TourismoProfile = {
   id: string; display_name: string|null; email: string|null; locale: 'en'|'si'|'ta';
@@ -76,9 +92,15 @@ export const getDestinationPhotos = (slug:string) =>
 export type AdminGuide = {locale:ContentLocale;overview:string;highlights:string[];local_tips:string[];source_name:string;source_url:string;content_status:string}
 export const adminDestinations = (token:string) => request<Destination[]>('/admin/destinations',{},token)
 export const adminGuide = (slug:string, token:string, locale:ContentLocale='en') => request<AdminGuide>(`/admin/destinations/${encodeURIComponent(slug)}/guide?locale=${locale}`,{},token)
-export const createAdminDestination = (body:Record<string,string>, token:string) => request<Destination>('/admin/destinations',{method:'POST',body:JSON.stringify(body)},token)
+export type LocationInput = {latitude?:number|null;longitude?:number|null;location_source_url?:string|null}
+export type DestinationCreate = {slug:string;title:string;district:string;province:string;summary:string} & LocationInput
+export type DestinationLocation = {latitude:number|null;longitude:number|null;location_source_url:string|null;content_status:string}
+export const getAdminDestinationLocation = (slug:string, token:string) => request<DestinationLocation>(`/admin/destinations/${encodeURIComponent(slug)}/location`,{},token)
+export const updateAdminDestinationLocation = (slug:string, body:LocationInput, token:string) => request<{status:string}>(`/admin/destinations/${encodeURIComponent(slug)}/location`,{method:'PATCH',body:JSON.stringify(body)},token)
+export const updateAdminPoiLocation = (slug:string, poiSlug:string, body:LocationInput, token:string) => request<{status:string}>(`/admin/destinations/${encodeURIComponent(slug)}/pois/${encodeURIComponent(poiSlug)}/location`,{method:'PATCH',body:JSON.stringify(body)},token)
+export const createAdminDestination = (body:DestinationCreate, token:string) => request<Destination>('/admin/destinations',{method:'POST',body:JSON.stringify(body)},token)
 export const saveAdminGuide = (slug:string, body:Omit<AdminGuide,'content_status'>, token:string) => request<{status:string}>(`/admin/destinations/${encodeURIComponent(slug)}/guide`,{method:'PUT',body:JSON.stringify(body)},token)
-export const createAdminPoi = (slug:string, body:Record<string,string|number>, token:string) => request<{slug:string}>(`/admin/destinations/${encodeURIComponent(slug)}/pois`,{method:'POST',body:JSON.stringify(body)},token)
+export const createAdminPoi = (slug:string, body:Record<string,string|number|null>, token:string) => request<{slug:string}>(`/admin/destinations/${encodeURIComponent(slug)}/pois`,{method:'POST',body:JSON.stringify(body)},token)
 export const publishAdminDestination = (slug:string, token:string) => request<{content_status:string}>(`/admin/destinations/${encodeURIComponent(slug)}/publish`,{method:'POST'},token)
 export const attachAdminPhoto = (slug:string, body:Record<string,string>, token:string) => request<{image_url:string}>(`/admin/destinations/${encodeURIComponent(slug)}/photos`,{method:'POST',body:JSON.stringify(body)},token)
 
@@ -100,7 +122,7 @@ export async function uploadAdminDestinationImage(slug:string, file:File, kind:'
   return response.json()
 }
 
-export type AdminPoi = {slug:string;title:string;content_status:string;has_source:boolean;latitude:number|null;longitude:number|null}
+export type AdminPoi = {slug:string;title:string;content_status:string;has_source:boolean;latitude:number|null;longitude:number|null;location_source_url?:string|null}
 export const listAdminPois=(slug:string,token:string)=>request<AdminPoi[]>(`/admin/destinations/${encodeURIComponent(slug)}/pois`,{},token)
 export const publishAdminPoi=(slug:string,poi:string,token:string)=>request<{content_status:string}>(`/admin/destinations/${encodeURIComponent(slug)}/pois/${encodeURIComponent(poi)}/publish`,{method:'POST'},token)
 
@@ -218,6 +240,7 @@ export type ServiceListing = {
   public_email:string|null; public_phone:string|null; photos:ListingPhoto[];
   latitude:number|null; longitude:number|null; location_source_url:string|null; location_note:string|null;
   status:ListingStatus; prices_are_indicative:boolean; booking_available:false;
+  business_name?:string|null; business_verified?:boolean;
   organization_id?:string; review_feedback?:string|null; published_at?:string|null;
   revision?:ListingRevision|null;
   is_demo?:boolean; demo_disclaimer?:string; distance_km?:number
@@ -285,3 +308,193 @@ export const submittedListingRevisions=(token:string)=>
   request<ListingRevision[]>('/admin/listings/revisions',{},token)
 export const decideListingRevision=(id:string,decision:'approved'|'changes_requested',reason:string,token:string)=>
   request<ListingRevision>(`/admin/listings/revisions/${id}/decision`,{method:'POST',body:JSON.stringify({decision,reason})},token)
+
+// Phase 5.1: Source-recorded map points only. Anonymous read-only APIs.
+export type MapPoint = {
+  id:string; kind:'destination'|'attraction'|'service'; title:string;
+  latitude:number; longitude:number; category:string; district:string;
+  detail_path:string; is_sample:boolean; business_verified:boolean;
+  location_note:string; source_url:string|null
+}
+export type MapConfig = {tile_url:string|null;attribution:string;demo_mode:boolean}
+export const getMapPoints = () => request<MapPoint[]>('/map/points')
+export type ViewportBounds = {south:number;west:number;north:number;east:number}
+export type ViewportResult = {points:MapPoint[];has_more:boolean;limit:number}
+export const getViewportPoints = (bounds:ViewportBounds, kind:'all'|MapPoint['kind']='all', signal?:AbortSignal) => {
+  const query=new URLSearchParams()
+  for(const key of ['south','west','north','east'] as const)query.set(key,String(bounds[key]))
+  query.set('kind',kind);query.set('limit','180')
+  return request<ViewportResult>(`/map/viewport?${query}`,{signal})
+}
+export const getMapConfig = () => request<MapConfig>('/map/config')
+export const resolveItineraryPlaces = (placeIds:string[]) => request<MapPoint[]>('/map/itinerary-places', {method:'POST', body:JSON.stringify({place_ids:placeIds})})
+export const planPlaceLink = (placeId:string, editTripId?:string|null) =>
+  `/plan?add_place=${encodeURIComponent(placeId)}${editTripId?`&edit_trip=${encodeURIComponent(editTripId)}`:''}`
+
+export type GeoAuditIssue = {kind:MapPoint['kind'];label:string;detail_path:string;district:string;latitude:number|null;longitude:number|null;reason:string}
+export type GeoAuditReport = {scanned:number;mapped:number;sourced_mapped:number;missing_coordinates:number;missing_location_source:number;outside_review_bounds:number;shared_coordinate_groups:number;issues:GeoAuditIssue[];issues_limited:boolean;scan_limited:boolean;note:string}
+export const getGeoQualityReport = (token:string) => request<GeoAuditReport>('/admin/geo-quality',{},token)
+
+// Phase 5.1 location-link import. Server follows only allowlisted HTTPS short redirects.
+export type ResolvedLocation = {latitude:number;longitude:number;source_url:string;provider:string;precision:'pin'|'map_center';message:string}
+export const resolveLocationLink = (url:string,token:string) => request<ResolvedLocation>('/map/resolve-location',{method:'POST',body:JSON.stringify({url})},token)
+
+
+// Phase 5.2: anonymous, bounded PostGIS straight-line discovery.
+export type NearbyPoint = MapPoint & {distance_km:number}
+export type NearbyResult = {
+  center:{title:string;latitude:number;longitude:number;kind:'destination'|'selected_location';destination_slug:string|null};
+  radius_km:number;points:NearbyPoint[];has_more:boolean;distance_note:string
+}
+export type NearbyFilters = {
+  destination?:string;near_lat?:number;near_lon?:number;
+  radius_km:number;kind:'all'|'destination'|'attraction'|'service';category?:string;q?:string
+}
+export const getNearbyPlaces = (filters:NearbyFilters):Promise<NearbyResult> => {
+  const params = new URLSearchParams()
+  if(filters.destination) params.set('destination',filters.destination)
+  else if(filters.near_lat!==undefined && filters.near_lon!==undefined){
+    params.set('near_lat',String(filters.near_lat));params.set('near_lon',String(filters.near_lon))
+  }
+  params.set('radius_km',String(filters.radius_km))
+  params.set('kind',filters.kind)
+  if(filters.category) params.set('category',filters.category)
+  if(filters.q?.trim()) params.set('q',filters.q.trim())
+  return request<NearbyResult>(`/map/nearby?${params.toString()}`)
+}
+
+// Phase 7: customer feedback is independent of vendor verification and listing publication review.
+export type CustomerReview = {
+  id:string; rating:number; title:string; body:string; author_label:string; images:string[];
+  visit_verified:false; created_at:string|null;
+  response:{body:string;responded_at:string|null}|null
+}
+export type CustomerReviewSummary = {
+  listing_slug:string; count:number; average_rating:number|null;
+  visit_verified:false; reviews:CustomerReview[]
+}
+export type MyCustomerReview = {
+  id:string;rating:number;title:string;body:string;
+  state:'pending'|'published'|'changes_requested'|'hidden';moderation_note:string|null;images:string[]
+}
+export type ReviewWrite = {rating:number;title:string;body:string;images?:string[]}
+export type ReportReason = 'spam'|'abuse'|'privacy'|'misleading'|'other'
+export const publicCustomerReviews=(slug:string,offset=0)=>
+  request<CustomerReviewSummary>(`/reviews/listings/${encodeURIComponent(slug)}?offset=${offset}&limit=5`)
+export const myCustomerReview=(slug:string,token:string)=>
+  request<{review:MyCustomerReview|null}>(`/reviews/listings/${encodeURIComponent(slug)}/mine`,{},token)
+export const submitCustomerReview=(slug:string,body:ReviewWrite,token:string)=>
+  request<{review:MyCustomerReview;message:string}>(`/reviews/listings/${encodeURIComponent(slug)}`,
+    {method:'POST',body:JSON.stringify(body)},token)
+export const reportCustomerReview=(id:string,reason:ReportReason,explanation:string,token:string)=>
+  request<{reported:boolean;message:string}>(`/reviews/${encodeURIComponent(id)}/reports`,
+    {method:'POST',body:JSON.stringify({reason,explanation})},token)
+export type ProviderCustomerReview = {
+  review:CustomerReview;listing_title:string;listing_slug:string;
+  response_draft:{body:string;state:string;moderation_note:string|null}|null
+}
+export const providerCustomerReviews=(orgId:string,token:string)=>
+  request<ProviderCustomerReview[]>(`/vendor/organizations/${orgId}/customer-reviews`,{},token)
+export const submitProviderResponse=(orgId:string,reviewId:string,body:string,token:string)=>
+  request<{state:string;message:string}>(`/vendor/organizations/${orgId}/customer-reviews/${reviewId}/response`,
+    {method:'POST',body:JSON.stringify({body})},token)
+export type ReviewModerationItem = MyCustomerReview & {
+  listing_id:string;listing_slug:string|null;listing_title:string|null;created_at:string|null
+}
+export type ReplyModerationItem = {
+  review_id:string;body:string;state:string;moderation_note:string|null;
+  listing_title:string;review_title:string;review_state:string
+}
+export type CustomerReportItem = {
+  id:string;review_id:string;reason:ReportReason;explanation:string;state:string;
+  review_title:string;review_state:string;listing_title:string
+}
+export type ReviewDecision = 'published'|'changes_requested'|'hidden'
+export const customerReviewQueue=(token:string,state='pending')=>
+  request<ReviewModerationItem[]>(`/admin/customer-reviews?state=${encodeURIComponent(state)}`,{},token)
+export const customerReplyQueue=(token:string,state='pending')=>
+  request<ReplyModerationItem[]>(`/admin/customer-reviews/replies?state=${encodeURIComponent(state)}`,{},token)
+export const customerReportQueue=(token:string,state='open')=>
+  request<CustomerReportItem[]>(`/admin/customer-reviews/reports?state=${encodeURIComponent(state)}`,{},token)
+export const moderateCustomerReview=(id:string,decision:ReviewDecision,reason:string,token:string)=>
+  request<{state:string}>(`/admin/customer-reviews/${id}/decision`,
+    {method:'POST',body:JSON.stringify({decision,reason})},token)
+export const moderateProviderResponse=(id:string,decision:ReviewDecision,reason:string,token:string)=>
+  request<{state:string}>(`/admin/customer-reviews/replies/${id}/decision`,
+    {method:'POST',body:JSON.stringify({decision,reason})},token)
+export const moderateCustomerReport=(id:string,decision:'dismissed'|'hide_review',reason:string,token:string)=>
+  request<{state:string}>(`/admin/customer-reviews/reports/${id}/decision`,
+    {method:'POST',body:JSON.stringify({decision,reason})},token)
+
+// Phase 8: private tourist-provider information requests. No booking or payment states.
+export type EnquiryState='open'|'answered'|'closed'|'withdrawn'|'blocked'
+export type EnquirySummary={id:string;listing_slug:string;listing_title:string;subject:string;state:EnquiryState;created_at:string|null;updated_at:string|null}
+export type EnquiryMessage={id:string;sender:'traveler'|'vendor';body:string;created_at:string|null}
+export type EnquiryThread=EnquirySummary&{messages:EnquiryMessage[];has_more:boolean}
+export type EnquiryReportReason='spam'|'abuse'|'privacy'|'misleading'|'other'
+export type EnquiryAbuseReport={id:string;enquiry_id:string;listing_title:string;subject:string;reason:EnquiryReportReason;explanation:string;state:string;thread_state:EnquiryState}
+export const createEnquiry=(slug:string,subject:string,message:string,token:string)=>
+  request<{enquiry:EnquirySummary;message:string}>(`/enquiries/listings/${encodeURIComponent(slug)}`,
+    {method:'POST',body:JSON.stringify({subject,message})},token)
+export const myEnquiries=(token:string)=>request<EnquirySummary[]>('/enquiries',{},token)
+export const myEnquiry=(id:string,token:string,offset=0)=>
+  request<EnquiryThread>(`/enquiries/${encodeURIComponent(id)}?offset=${offset}`,{},token)
+export const postTravelerMessage=(id:string,body:string,token:string)=>
+  request<{sent:boolean;state:EnquiryState}>(`/enquiries/${encodeURIComponent(id)}/messages`,{method:'POST',body:JSON.stringify({body})},token)
+export const withdrawEnquiry=(id:string,token:string)=>
+  request<{state:EnquiryState}>(`/enquiries/${encodeURIComponent(id)}/withdraw`,{method:'POST'},token)
+export const vendorEnquiries=(orgId:string,token:string)=>
+  request<EnquirySummary[]>(`/vendor/organizations/${encodeURIComponent(orgId)}/enquiries`,{},token)
+export const vendorEnquiry=(orgId:string,id:string,token:string,offset=0)=>
+  request<EnquiryThread>(`/vendor/organizations/${encodeURIComponent(orgId)}/enquiries/${encodeURIComponent(id)}?offset=${offset}`,{},token)
+export const postVendorMessage=(orgId:string,id:string,body:string,token:string)=>
+  request<{sent:boolean;state:EnquiryState}>(`/vendor/organizations/${encodeURIComponent(orgId)}/enquiries/${encodeURIComponent(id)}/messages`,
+    {method:'POST',body:JSON.stringify({body})},token)
+export const closeVendorEnquiry=(orgId:string,id:string,token:string)=>
+  request<{state:EnquiryState}>(`/vendor/organizations/${encodeURIComponent(orgId)}/enquiries/${encodeURIComponent(id)}/close`,{method:'POST'},token)
+export const reportEnquiry=(id:string,reason:EnquiryReportReason,explanation:string,token:string)=>
+  request<{reported:boolean;message:string}>(`/enquiries/${encodeURIComponent(id)}/reports`,
+    {method:'POST',body:JSON.stringify({reason,explanation})},token)
+export const enquiryAbuseReports=(token:string,state:'open'|'dismissed'|'actioned'='open')=>
+  request<EnquiryAbuseReport[]>(`/admin/enquiry-reports?state=${state}`,{},token)
+export const moderateEnquiryReport=(id:string,decision:'dismissed'|'block_thread',reason:string,token:string)=>
+  request<{state:string;thread_state:EnquiryState}>(`/admin/enquiry-reports/${encodeURIComponent(id)}/decision`,
+    {method:'POST',body:JSON.stringify({decision,reason})},token)
+
+export const reportedEnquiryThread=(reportId:string,token:string,offset=0)=>
+  request<EnquiryThread>(`/admin/enquiry-reports/${encodeURIComponent(reportId)}/thread?offset=${offset}`,{},token)
+
+
+// Phase 7.1: multiple reviews, photo gallery and editing one specific review.
+export const myCustomerReviews=(slug:string,token:string)=>
+  request<{reviews:MyCustomerReview[];review:MyCustomerReview|null;remaining:number}>(
+    `/reviews/listings/${encodeURIComponent(slug)}/mine`,{},token)
+export const editCustomerReview=(id:string,body:ReviewWrite,token:string)=>
+  request<{review:MyCustomerReview;message:string}>(`/reviews/${encodeURIComponent(id)}`,
+    {method:'PATCH',body:JSON.stringify(body)},token)
+
+
+// Phase 9C: per-account inbox + one-to-many release announcements (in-app only).
+export type NotificationItem={id:string;kind:string;title:string;body:string;target_url:string;
+  created_at:string|null;read:boolean;announcement:boolean}
+export type NotificationInbox={items:NotificationItem[];unread_count:number;has_more:boolean}
+export type AnnouncementWrite={release_key:string;title:string;body:string;target_url:string;expires_in_days:number}
+export const allNotifications=(token:string,offset=0)=>
+  request<NotificationInbox>(`/notifications?offset=${offset}&limit=30`,{},token)
+export const unreadNotificationCount=(token:string)=>
+  request<{unread_count:number}>('/notifications/unread-count',{},token)
+export const markNotificationRead=(id:string,token:string)=>
+  request<{read:boolean}>(`/notifications/${encodeURIComponent(id)}/read`,{method:'POST'},token)
+export const markAllNotificationsRead=(token:string)=>
+  request<{unread_count:number}>('/notifications/read-all',{method:'POST'},token)
+export const publishReleaseAnnouncement=(body:AnnouncementWrite,token:string)=>
+  request<{id:string;published:boolean}>('/admin/announcements',{method:'POST',body:JSON.stringify(body)},token)
+export const removeCustomerReview=(id:string,reason:string,token:string)=>
+  request<{state:string;removed:boolean}>(`/admin/customer-reviews/${encodeURIComponent(id)}/remove`,
+    {method:'POST',body:JSON.stringify({reason})},token)
+
+// Phase 10B: signed-in email preferences. Email is optional, server configured.
+export type EmailPreferences = {activity_enabled:boolean; releases_enabled:boolean; verified_email_available:boolean; delivery_configured:boolean}
+export const emailPreferences=(token:string)=>request<EmailPreferences>('/notifications/email-preferences',{},token)
+export const setEmailPreferences=(values:Pick<EmailPreferences,'activity_enabled'|'releases_enabled'>,token:string)=>
+  request<EmailPreferences>('/notifications/email-preferences',{method:'PATCH',body:JSON.stringify(values)},token)

@@ -2,7 +2,7 @@ from datetime import datetime, date, timezone
 import uuid
 from sqlalchemy import (
     BigInteger, Boolean, CheckConstraint, Date, DateTime, ForeignKey,
-    Index, Integer, Float, LargeBinary, String, Text, UniqueConstraint,
+    Index, Integer, Float, LargeBinary, String, Text, UniqueConstraint, text,
 )
 from tourismo.core.geo import Geography
 from sqlalchemy.dialects.postgresql import UUID, JSONB
@@ -68,6 +68,7 @@ class Destination(Base):
     district: Mapped[str] = mapped_column(String(120), index=True)
     province: Mapped[str] = mapped_column(String(120))
     location: Mapped[object | None] = mapped_column(Geography(), nullable=True)
+    location_source_url: Mapped[str | None] = mapped_column(String(2048))
     content_status: Mapped[str] = mapped_column(String(30), default='draft', nullable=False, index=True)
     source_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey('content_sources.id'))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
@@ -169,6 +170,7 @@ class PointOfInterest(Base):
     location: Mapped[object | None] = mapped_column(Geography(), nullable=True)
     latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    location_source_url: Mapped[str | None] = mapped_column(String(2048))
     content_status: Mapped[str] = mapped_column(String(30), nullable=False, default='draft', index=True)
     source_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey('content_sources.id'))
     verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -329,6 +331,7 @@ class ServiceListing(Base):
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+    organization: Mapped[VendorOrganization] = relationship(lazy='selectin')
     photos: Mapped[list['ServiceListingPhoto']] = relationship(back_populates='listing', lazy='selectin', order_by='ServiceListingPhoto.created_at', cascade='all, delete-orphan')
     revisions: Mapped[list['ServiceListingRevision']] = relationship(back_populates='listing', lazy='selectin', order_by='ServiceListingRevision.created_at')
     __table_args__ = (
@@ -391,3 +394,218 @@ class ServiceListingRevision(Base):
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     listing: Mapped[ServiceListing] = relationship(back_populates='revisions')
     __table_args__ = (CheckConstraint("status IN ('draft','submitted','changes_requested','approved')", name='ck_service_listing_revision_status'),)
+
+
+class CustomerReview(Base):
+    """User-authored feedback, separate from ServiceListingReview (editorial publication decisions)."""
+    __tablename__ = 'customer_reviews'
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
+    listing_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('service_listings.id', ondelete='CASCADE'), nullable=False, index=True)
+    author_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id', ondelete='RESTRICT'), nullable=False, index=True)
+    rating: Mapped[int] = mapped_column(Integer, nullable=False)
+    title: Mapped[str] = mapped_column(String(120), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    state: Mapped[str] = mapped_column(String(24), nullable=False, default='pending', index=True)
+    moderation_note: Mapped[str | None] = mapped_column(String(600))
+    moderated_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey('users.id', ondelete='RESTRICT'))
+    moderated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+    __table_args__ = (
+        Index('ix_customer_reviews_listing_author', 'listing_id', 'author_id'),
+        CheckConstraint('rating >= 1 AND rating <= 5', name='ck_customer_review_rating'),
+        CheckConstraint("state IN ('pending','published','changes_requested','hidden')", name='ck_customer_review_state'),
+        Index('ix_customer_review_listing_state', 'listing_id', 'state'),
+    )
+
+
+class CustomerReviewReply(Base):
+    """One provider response per customer review; edited replies require renewed moderation."""
+    __tablename__ = 'customer_review_replies'
+    review_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('customer_reviews.id', ondelete='CASCADE'), primary_key=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('vendor_organizations.id', ondelete='RESTRICT'), nullable=False)
+    author_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id', ondelete='RESTRICT'), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    state: Mapped[str] = mapped_column(String(24), nullable=False, default='pending', index=True)
+    moderation_note: Mapped[str | None] = mapped_column(String(600))
+    moderated_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey('users.id', ondelete='RESTRICT'))
+    moderated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+    __table_args__ = (
+        CheckConstraint("state IN ('pending','published','changes_requested','hidden')", name='ck_customer_review_reply_state'),
+    )
+
+
+class CustomerReviewReport(Base):
+    """One privacy/abuse report per account and review; report content is admin-only."""
+    __tablename__ = 'customer_review_reports'
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
+    review_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('customer_reviews.id', ondelete='CASCADE'), nullable=False, index=True)
+    reporter_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id', ondelete='RESTRICT'), nullable=False)
+    reason: Mapped[str] = mapped_column(String(24), nullable=False)
+    explanation: Mapped[str] = mapped_column(String(600), nullable=False)
+    state: Mapped[str] = mapped_column(String(20), nullable=False, default='open', index=True)
+    reviewed_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey('users.id', ondelete='RESTRICT'))
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    __table_args__ = (
+        UniqueConstraint('review_id', 'reporter_id', name='uq_customer_review_reporter'),
+        CheckConstraint("reason IN ('spam','abuse','privacy','misleading','other')", name='ck_customer_review_report_reason'),
+        CheckConstraint("state IN ('open','dismissed','actioned')", name='ck_customer_review_report_state'),
+    )
+
+
+class ServiceEnquiry(Base):
+    """Private conversation about one published service; never a reservation."""
+    __tablename__ = 'service_enquiries'
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
+    listing_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('service_listings.id', ondelete='RESTRICT'), nullable=False, index=True)
+    traveler_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id', ondelete='RESTRICT'), nullable=False, index=True)
+    subject: Mapped[str] = mapped_column(String(140), nullable=False)
+    state: Mapped[str] = mapped_column(String(20), nullable=False, default='open', index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+    __table_args__ = (
+        CheckConstraint("state IN ('open','answered','closed','withdrawn','blocked')", name='ck_service_enquiry_state'),
+        Index('uq_service_enquiry_active', 'listing_id', 'traveler_id', unique=True,
+              postgresql_where=text("state IN ('open','answered')")),
+        Index('ix_service_enquiry_traveler_created', 'traveler_id', 'created_at'),
+    )
+
+
+class ServiceEnquiryMessage(Base):
+    """Append-only message text; author and role are determined by server-side identity."""
+    __tablename__ = 'service_enquiry_messages'
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
+    enquiry_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('service_enquiries.id', ondelete='RESTRICT'), nullable=False, index=True)
+    sender_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id', ondelete='RESTRICT'), nullable=False)
+    sender_type: Mapped[str] = mapped_column(String(12), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    __table_args__ = (
+        CheckConstraint("sender_type IN ('traveler','vendor')", name='ck_service_enquiry_sender'),
+        Index('ix_service_enquiry_messages_page', 'enquiry_id', 'created_at', 'id'),
+        Index('ix_service_enquiry_message_sender_time', 'sender_id', 'created_at'),
+    )
+
+
+class ServiceEnquiryReport(Base):
+    """Private abuse reports visible only to admins; no public report count."""
+    __tablename__ = 'service_enquiry_reports'
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
+    enquiry_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('service_enquiries.id', ondelete='RESTRICT'), nullable=False, index=True)
+    reporter_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id', ondelete='RESTRICT'), nullable=False)
+    reason: Mapped[str] = mapped_column(String(24), nullable=False)
+    explanation: Mapped[str] = mapped_column(String(600), nullable=False)
+    state: Mapped[str] = mapped_column(String(20), nullable=False, default='open', index=True)
+    reviewed_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey('users.id', ondelete='RESTRICT'))
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    __table_args__ = (
+        UniqueConstraint('enquiry_id', 'reporter_id', name='uq_service_enquiry_reporter'),
+        CheckConstraint("reason IN ('spam','abuse','privacy','misleading','other')", name='ck_service_enquiry_report_reason'),
+        CheckConstraint("state IN ('open','dismissed','actioned')", name='ck_service_enquiry_report_state'),
+    )
+
+
+import sqlalchemy as _phase71_sa
+
+
+class CustomerReviewImage(Base):
+    """Bounded, normalized JPEG attachment; never served unless review is published."""
+    __tablename__ = 'customer_review_images'
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
+    review_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('customer_reviews.id', ondelete='CASCADE'), nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    jpeg_data: Mapped[bytes] = mapped_column(_phase71_sa.LargeBinary, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    __table_args__ = (
+        Index('ix_customer_review_images_review', 'review_id'),
+        UniqueConstraint('review_id', 'position', name='uq_customer_review_image_position'),
+        CheckConstraint('position >= 0 AND position <= 4', name='ck_customer_review_image_position'),
+    )
+
+
+class UserNotification(Base):
+    """Private inbox item. Dedupe key is scoped to exactly one recipient."""
+    __tablename__ = 'user_notifications'
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
+    recipient_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    kind: Mapped[str] = mapped_column(String(48), nullable=False)
+    title: Mapped[str] = mapped_column(String(160), nullable=False)
+    body: Mapped[str] = mapped_column(String(600), nullable=False)
+    target_url: Mapped[str] = mapped_column(String(400), nullable=False)
+    dedupe_key: Mapped[str] = mapped_column(String(190), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, nullable=False)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    __table_args__ = (
+        UniqueConstraint('recipient_id', 'dedupe_key', name='uq_user_notification_dedupe'),
+        CheckConstraint("char_length(title) > 0 AND char_length(body) > 0", name='ck_notification_nonempty'),
+        Index('ix_user_notification_inbox', 'recipient_id', 'created_at'),
+        Index('ix_user_notification_unread', 'recipient_id', 'read_at'),
+    )
+
+
+class PlatformAnnouncement(Base):
+    """One administrator-published release notice, shown without mass fan-out."""
+    __tablename__ = 'platform_announcements'
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
+    release_key: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    title: Mapped[str] = mapped_column(String(160), nullable=False)
+    body: Mapped[str] = mapped_column(String(600), nullable=False)
+    target_url: Mapped[str] = mapped_column(String(400), nullable=False)
+    created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id', ondelete='RESTRICT'), nullable=False)
+    published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, nullable=False)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    __table_args__ = (Index('ix_platform_announcement_published', 'published_at'),
+                      CheckConstraint("char_length(title) > 0 AND char_length(body) > 0", name='ck_announcement_nonempty'))
+
+
+class AnnouncementRead(Base):
+    """One per-user receipt, never marks a release read for other users."""
+    __tablename__ = 'announcement_reads'
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
+    announcement_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('platform_announcements.id', ondelete='CASCADE'), primary_key=True)
+    read_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, nullable=False)
+
+
+class EmailPreference(Base):
+    """The user owns email delivery choices; release email is opt-in."""
+    __tablename__ = 'email_preferences'
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
+    activity_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    releases_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=now_utc, onupdate=now_utc)
+
+
+class EmailOutbox(Base):
+    """Idempotent, retryable mail job. The user's current verified email is looked up at delivery."""
+    __tablename__ = 'email_outbox'
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
+    recipient_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    notification_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey('user_notifications.id', ondelete='CASCADE'))
+    announcement_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey('platform_announcements.id', ondelete='CASCADE'))
+    idempotency_key: Mapped[str] = mapped_column(String(190), nullable=False, unique=True)
+    state: Mapped[str] = mapped_column(String(16), nullable=False, default='queued', index=True)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    next_attempt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=now_utc)
+    lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_status: Mapped[str | None] = mapped_column(String(80))
+    provider_id: Mapped[str | None] = mapped_column(String(120))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=now_utc)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    __table_args__ = (
+        CheckConstraint("state IN ('queued','sending','sent','failed','suppressed')", name='ck_email_outbox_state'),
+        CheckConstraint("(notification_id IS NOT NULL) <> (announcement_id IS NOT NULL)", name='ck_email_outbox_one_source'),
+        Index('ix_email_outbox_ready', 'state', 'next_attempt_at'),
+    )
+
+
+class EmailBroadcastJob(Base):
+    """Batch cursors prevent huge release fan-outs in an admin HTTP request."""
+    __tablename__ = 'email_broadcast_jobs'
+    announcement_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('platform_announcements.id', ondelete='CASCADE'), primary_key=True)
+    last_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    finished: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=now_utc)

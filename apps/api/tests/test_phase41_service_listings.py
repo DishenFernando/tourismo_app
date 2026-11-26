@@ -15,7 +15,7 @@ from tourismo.core.models import (
 )
 from tourismo.listings.routes import (
     AccommodationDetails, ListingDecision, ListingWrite, PhotoWrite, admin_decide_listing,
-    listing_dict, validate_details, _draft, _approved_org, _public_query,
+    listing_dict, validate_details, _draft, _publishable_org, _public_query,
 )
 from tourismo.main import app
 
@@ -121,10 +121,14 @@ def test_admin_cannot_self_approve_a_submitted_listing():
     db.commit.assert_not_called()
 
 
-def test_unverified_business_cannot_submit_or_publish():
+def test_business_verification_is_separate_from_listing_content_review():
+    db=Mock()
+    db.scalar.return_value=None
     org=VendorOrganization(id=uuid.uuid4(),verification_state='submitted')
+    _publishable_org(org, db)  # An unverified business may request listing review.
+    org.verification_state='rejected'
     with pytest.raises(HTTPException) as exc:
-        _approved_org(org,Mock())
+        _publishable_org(org, db)
     assert exc.value.status_code == 409
 
 

@@ -12,6 +12,7 @@ from tourismo.core.database import get_db
 from tourismo.core.models import User, now_utc
 from tourismo.identity.security import require_user
 from tourismo.admin.permissions import active_roles
+from tourismo.notifications.service import queue_notification
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix='/api/v1', tags=['identity'])
@@ -95,8 +96,13 @@ def bootstrap(user: User = Depends(require_user), db: Session = Depends(get_db))
             user.email = email
         if name and not user.display_name:
             user.display_name = name[:160]
-        db.commit()
-        db.refresh(user)
+    # In-app welcome is idempotent even if login bootstrap is called repeatedly.
+    # No email/SMS is sent; the user sees this after opening notifications.
+    queue_notification(db, user.id, 'welcome', 'Welcome to Tourismo',
+                       'Your account is ready. Explore places and complete your profile to save trips and write reviews.',
+                       '/account', 'welcome:v1')
+    db.commit()
+    db.refresh(user)
     return serialize_profile(user, db)
 
 

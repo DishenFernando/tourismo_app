@@ -17,6 +17,7 @@ from tourismo.core.models import (
     VendorOrganization, VendorVerificationCheck, now_utc,
 )
 from tourismo.identity.security import require_user, require_privileged_mfa
+from tourismo.notifications.service import queue_notification
 
 router = APIRouter(prefix='/api/v1/vendor', tags=['vendor-onboarding'])
 admin_router = APIRouter(prefix='/api/v1/admin/vendor-verifications', tags=['vendor-verification'])
@@ -171,7 +172,7 @@ class VerificationDecision(BaseModel):
 def organization_dict(org: VendorOrganization, db: Session | None = None) -> dict:
     """Private response. Never include this representation in public listing APIs."""
     published = False
-    if db and org.verification_state == 'approved':
+    if db and org.verification_state not in ('rejected', 'expired_license'):
         expired = db.scalar(select(VendorEvidence.id).where(
             VendorEvidence.organization_id == org.id, VendorEvidence.expires_on.is_not(None),
             VendorEvidence.expires_on < date.today()).limit(1))
@@ -474,5 +475,8 @@ def verification_decision(org_id: UUID, body: VerificationDecision,
     db.add(VendorVerificationCheck(organization_id=org.id, reviewer_id=admin.id,
         decision=body.decision, reason=body.reason, source_url=body.source_url))
     _event(db,admin,f'vendor.verification.{body.decision}',org,body.reason)
+    queue_notification(db, org.owner_id, 'vendor_verification', 'Business verification updated',
+                       f'Your business {org.business_name} verification status is {body.decision.replace("_", " ")}.',
+                       '/vendors', f'vendor-verification:{org.id}:{body.decision}')
     db.commit()
     return organization_dict(org)

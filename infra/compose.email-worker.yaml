@@ -1,0 +1,14 @@
+# Optional overlay. Start ONLY after verifying an email domain and configuring .env.
+# docker compose --env-file .env -f infra/compose.yaml -f infra/compose.email-worker.yaml up --build -d
+services:
+  app:
+    image: tourismo-app
+  email-worker:
+    image: tourismo-app
+    restart: unless-stopped
+    working_dir: /app/apps/api
+    command: ["python", "-m", "tourismo.notifications.mail_worker"]
+    env_file: ../.env
+    depends_on:
+      db:
+        condition: service_healthy

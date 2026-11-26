@@ -1,6 +1,6 @@
 """Phase 4.1: structured discovery-only tourism listings.
 
-Public routes expose ONLY published listings from currently approved organizations.
+Public routes expose reviewed/published listings; business verification controls the badge, not publication.
 Private organization details, license evidence and draft content never leave privileged routes.
 """
 import re
@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, ValidationError, field_validator, model_validator, ValidationInfo
 from sqlalchemy import Integer, and_, cast, exists, func, literal, or_, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.dialects.postgresql import JSONB
 
 from tourismo.admin.permissions import require_admin
@@ -25,6 +25,7 @@ from tourismo.core.models import (
     VendorEvidence, VendorMembership, VendorOrganization, now_utc,
 )
 from tourismo.identity.security import require_privileged_mfa, require_user
+from tourismo.notifications.service import queue_notification
 from tourismo.vendors.routes import _organization
 
 public_router = APIRouter(prefix='/api/v1/listings', tags=['public-listings'])
@@ -290,6 +291,8 @@ def listing_dict(item: ServiceListing) -> dict:
         'location_source_url': item.location_source_url, 'location_note': item.location_note,
         'status': item.status,
         'prices_are_indicative': True, 'booking_available': False,
+        'business_name': getattr(getattr(item, 'organization', None), 'business_name', None),
+        'business_verified': (getattr(getattr(item, 'organization', None), 'verification_state', None) == 'approved'),
     }
 
 
@@ -328,23 +331,35 @@ def _draft(item: ServiceListing) -> None:
         raise HTTPException(409, 'Submitted/published listings cannot be edited; use the review workflow')
 
 
-def _approved_org(org: VendorOrganization, db: Session) -> None:
-    if org.verification_state != 'approved':
-        raise HTTPException(409, 'Business verification must be approved first')
-    invalid = db.scalar(select(VendorEvidence.id).where(
+def _publishable_org(org: VendorOrganization, db: Session) -> None:
+    """Business registration permits a review request, NOT a verified badge.
+
+    Rejected organizations and expired licenses are fail-closed. Previously approved
+    organizations with expired evidence also stay hidden until a valid renewal.
+    """
+    if org.verification_state in ('rejected', 'expired_license'):
+        raise HTTPException(409, 'Business is not eligible for public listings; resolve compliance first')
+    expired = db.scalar(select(VendorEvidence.id).where(
         VendorEvidence.organization_id == org.id,
         VendorEvidence.expires_on.is_not(None), VendorEvidence.expires_on < date.today()).limit(1))
-    if invalid:
-        raise HTTPException(409, 'Business has expired evidence and requires re-verification')
+    if expired:
+        raise HTTPException(409, 'Business has expired evidence; renew it before publication')
 
 
 def _public_query():
-    """Use independent DB-verification checks even if maintenance tasks haven't run."""
+    """Only independently reviewed listings from eligible businesses are public.
+
+    Being listed does not establish business identity, SLTDA registration or safety.
+    """
     expired = exists(select(VendorEvidence.id).where(
         VendorEvidence.organization_id == VendorOrganization.id,
         VendorEvidence.expires_on.is_not(None), VendorEvidence.expires_on < date.today()))
-    return (select(ServiceListing).join(VendorOrganization, ServiceListing.organization_id == VendorOrganization.id)
-            .where(ServiceListing.status == 'published', VendorOrganization.verification_state == 'approved', ~expired))
+    return (select(ServiceListing)
+            .join(VendorOrganization, ServiceListing.organization_id == VendorOrganization.id)
+            .options(selectinload(ServiceListing.organization))
+            .where(ServiceListing.status == 'published',
+                   VendorOrganization.verification_state.notin_(['rejected', 'expired_license']),
+                   ~expired))
 
 
 def evaluate_family_fit(details: dict, adults: int, child_ages: list[int]) -> dict:
@@ -600,7 +615,9 @@ def submit_listing(org_id: UUID, listing_id: UUID,
                    user: User = Depends(require_user), db: Session = Depends(get_db)):
     org, item = _member_listing(db, org_id, listing_id, user, ('owner', 'manager'))
     _draft(item)
-    _approved_org(org, db)
+    _publishable_org(org, db)
+    if not org.district or not org.province:
+        raise HTTPException(422, 'Complete the business district and province before submitting a listing')
     # A quick-start draft is intentionally incomplete. Never submit/publish until
     # EVERY normal ListingWrite constraint is satisfied, including descriptions.
     try:
@@ -686,7 +703,7 @@ def submit_revision(org_id: UUID, listing_id: UUID,
     revision = _active_revision(item)
     if item.status != 'published' or revision is None or revision.status not in ('draft', 'changes_requested'):
         raise HTTPException(409, 'No editable published-listing revision is available')
-    _approved_org(org, db)
+    _publishable_org(org, db)
     data = ListingRevisionWrite.model_validate(revision.snapshot)
     validate_details(item.category, data.details)
     if not data.public_email and not data.public_phone:
@@ -730,7 +747,7 @@ def decide_revision(revision_id: UUID, body: RevisionDecision,
             VendorMembership.organization_id == org.id, VendorMembership.user_id == admin.id)):
         raise HTTPException(403, 'Cannot review a listing from your own organization')
     if body.decision == 'approved':
-        _approved_org(org, db)
+        _publishable_org(org, db)
         data = ListingRevisionWrite.model_validate(revision.snapshot)
         validate_details(item.category, data.details)
         if not data.public_email and not data.public_phone:
@@ -799,7 +816,7 @@ def admin_decide_listing(listing_id: UUID, body: ListingDecision,
     if org.owner_id == admin.id or membership:
         raise HTTPException(403, 'Cannot review your own business listing')
     if body.decision == 'published':
-        _approved_org(org, db)
+        _publishable_org(org, db)
         validate_details(item.category, item.details)
         if not item.public_email and not item.public_phone:
             raise HTTPException(422, 'A public contact is required for publication')
@@ -810,5 +827,8 @@ def admin_decide_listing(listing_id: UUID, body: ListingDecision,
     db.add(ServiceListingReview(listing_id=item.id, reviewer_id=admin.id,
                                 decision=body.decision, reason=body.reason))
     _event(db, admin, item, 'listing.review.' + body.decision, body.reason)
+    queue_notification(db, org.owner_id, 'listing_decision', 'Service listing decision',
+                       f'Your service {item.title} has been {body.decision.replace("_", " ")}.',
+                       '/vendor/listings', f'listing-decision:{item.id}:{body.decision}')
     db.commit()
     return _private_dict(item)

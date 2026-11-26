@@ -26,6 +26,7 @@ class DestinationResponse(BaseModel):
     summary: str
     content_status: str
     is_sample: bool
+    location_source_url: str | None = None
     photo: PhotoResponse | None = None
 
 
@@ -41,7 +42,8 @@ def shape(row: Destination, locale: str = 'en') -> DestinationResponse:
     return DestinationResponse(photo=photo, slug=row.slug, title=translation.title if translation else row.slug,
                                district=row.district, province=row.province,
                                summary=translation.summary if translation else '',
-                               content_status=row.content_status, is_sample=row.content_status == 'sample')
+                               content_status=row.content_status, is_sample=row.content_status == 'sample',
+                               location_source_url=getattr(row, "location_source_url", None))
 
 
 @router.get('', response_model=list[DestinationResponse])

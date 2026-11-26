@@ -3,7 +3,7 @@ from typing import Literal
 from urllib.parse import urlsplit
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator as pydantic_model_validator
-from sqlalchemy import select, func
+from sqlalchemy import select, func, cast
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from tourismo.admin.permissions import require_editor, require_admin
@@ -12,11 +12,42 @@ from tourismo.core.models import (User, Destination, DestinationTranslation, Des
                                   PointOfInterest, PoiTranslation, DestinationPhoto,
                                   ContentSource, AuditEvent, GuideRevision, now_utc)
 from tourismo.geography.routes import shape, DestinationResponse
+from tourismo.maps.routes import Geometry
+from tourismo.admin.permissions import active_roles
 
 router = APIRouter(prefix='/api/v1/admin', tags=['editorial-admin'])
 
 
-class CreatePlace(BaseModel):
+class LocationFields(BaseModel):
+    latitude: float | None = Field(default=None, ge=-90, le=90, allow_inf_nan=False)
+    longitude: float | None = Field(default=None, ge=-180, le=180, allow_inf_nan=False)
+    location_source_url: str | None = Field(default=None, max_length=2048)
+
+    @field_validator('location_source_url')
+    @classmethod
+    def valid_location_source(cls, value: str | None):
+        if value:
+            parsed = urlsplit(value)
+            if parsed.scheme != 'https' or not parsed.hostname or parsed.username is not None or parsed.password is not None or parsed.port not in (None, 443):
+                raise ValueError('Location source must be a public HTTPS link')
+        return value
+
+    @pydantic_model_validator(mode='after')
+    def matching_coordinates(self):
+        if (self.latitude is None) != (self.longitude is None):
+            raise ValueError('Provide both coordinates or neither')
+        if self.latitude is not None and not self.location_source_url:
+            raise ValueError('A location-source link is required with coordinates')
+        if self.latitude is None and self.location_source_url:
+            raise ValueError('Coordinates are required with a location link')
+        return self
+
+
+class DestinationLocationEdit(LocationFields):
+    model_config = ConfigDict(extra='forbid')
+
+
+class CreatePlace(LocationFields):
     model_config = ConfigDict(extra='forbid')
     slug: str = Field(pattern=r'^[a-z0-9]+(?:-[a-z0-9]+)*$', max_length=120)
     title: str = Field(min_length=2, max_length=160)
@@ -42,14 +73,12 @@ class GuideEdit(BaseModel):
         return value
 
 
-class PoiCreate(BaseModel):
+class PoiCreate(LocationFields):
     model_config = ConfigDict(extra='forbid')
     slug: str = Field(pattern=r'^[a-z0-9]+(?:-[a-z0-9]+)*$', max_length=120)
     title: str = Field(min_length=2, max_length=160)
     category: Literal['heritage', 'nature', 'landmark', 'beach', 'wildlife', 'culture', 'adventure']
     description: str = Field(min_length=10, max_length=4000)
-    latitude: float | None = Field(default=None, ge=-90, le=90)
-    longitude: float | None = Field(default=None, ge=-180, le=180)
     source_url: str | None = Field(default=None, max_length=2048)
     source_name: str | None = Field(default=None, max_length=160)
 
@@ -61,11 +90,21 @@ class PoiCreate(BaseModel):
         return value
 
     @pydantic_model_validator(mode='after')
-    def coordinates_together(self):
+    def matching_coordinates(self):
+        # Legacy records supplied an editorial source URL for mapped POIs.
+        # Keep that input contract, while supporting a separate map link.
         if (self.latitude is None) != (self.longitude is None):
-            raise ValueError('Provide both latitude and longitude, or neither')
+            raise ValueError('Provide both coordinates or neither')
+        if self.latitude is not None and not (self.location_source_url or (self.source_url and self.source_name)):
+            raise ValueError('Coordinates need a map link or an editorial source')
+        if self.latitude is None and self.location_source_url:
+            raise ValueError('Coordinates are required with a location link')
+        return self
+
+    @pydantic_model_validator(mode='after')
+    def coordinates_together(self):
         if self.latitude is not None and not (self.source_url and self.source_name):
-            raise ValueError('Coordinates require an identifiable HTTPS source')
+            raise ValueError('Attraction coordinates also require an editorial source and source name')
         return self
 
 
@@ -172,7 +211,10 @@ def list_all(status: Literal['draft', 'sample', 'published'] | None = None,
 
 @router.post('/destinations', response_model=DestinationResponse, status_code=201)
 def create_place(data: CreatePlace, db: Session = Depends(get_db), editor: User = Depends(require_editor)):
-    place = Destination(slug=data.slug, district=data.district, province=data.province, content_status='draft')
+    place = Destination(slug=data.slug, district=data.district, province=data.province, content_status='draft',
+                        location_source_url=data.location_source_url)
+    if data.latitude is not None:
+        place.location = func.ST_SetSRID(func.ST_MakePoint(data.longitude, data.latitude), 4326)
     try:
         db.add(place)
         db.flush()
@@ -185,6 +227,31 @@ def create_place(data: CreatePlace, db: Session = Depends(get_db), editor: User 
         db.rollback()
         raise HTTPException(status_code=409, detail='Destination slug already exists') from error
     return shape(place)
+
+
+@router.get('/destinations/{slug}/location')
+def get_destination_location(slug: str, db: Session = Depends(get_db),
+                             editor: User = Depends(require_editor)):
+    place = _place(db, slug)
+    row = db.execute(select(func.ST_Y(cast(Destination.location, Geometry())),
+                            func.ST_X(cast(Destination.location, Geometry())))
+                     .where(Destination.id == place.id)).one()
+    return {'latitude':row[0], 'longitude':row[1],
+            'location_source_url':place.location_source_url, 'content_status':place.content_status}
+
+
+@router.patch('/destinations/{slug}/location')
+def update_destination_location(slug: str, data: DestinationLocationEdit,
+                                db: Session = Depends(get_db), editor: User = Depends(require_editor)):
+    place = _place(db, slug)
+    if place.content_status in ('published', 'sample') and 'admin' not in active_roles(db, editor):
+        raise HTTPException(status_code=403, detail='Only administrators can change locations of public destinations')
+    place.location = (func.ST_SetSRID(func.ST_MakePoint(data.longitude, data.latitude), 4326)
+                      if data.latitude is not None else None)
+    place.location_source_url = data.location_source_url
+    _audit(db, editor, 'destination.location_changed', place, 'Source checked by editor; no automatic map verification')
+    db.commit()
+    return {'status':'saved', 'slug':slug}
 
 
 @router.put('/destinations/{slug}/guide')
@@ -230,7 +297,8 @@ def add_poi(slug: str, data: PoiCreate, db: Session = Depends(get_db),
             editor: User = Depends(require_editor)):
     place = _place(db, slug)
     poi = PointOfInterest(destination_id=place.id, slug=data.slug, category=data.category, content_status='draft',
-                          latitude=data.latitude, longitude=data.longitude)
+                          latitude=data.latitude, longitude=data.longitude,
+                          location_source_url=data.location_source_url)
     if data.latitude is not None:
         poi.location = func.ST_SetSRID(func.ST_MakePoint(data.longitude, data.latitude), 4326)
     try:
@@ -328,7 +396,27 @@ def admin_pois(slug: str, db: Session = Depends(get_db), editor: User = Depends(
                          .order_by(PointOfInterest.slug)).all()
     return [{'slug':p.slug, 'title':next((t.title for t in p.translations if t.locale == 'en'),p.slug),
              'content_status':p.content_status, 'has_source':bool(p.source_id),
-             'latitude':p.latitude, 'longitude':p.longitude} for p in results]
+             'latitude':p.latitude, 'longitude':p.longitude,
+             'location_source_url':p.location_source_url} for p in results]
+
+
+@router.patch('/destinations/{slug}/pois/{poi_slug}/location')
+def update_poi_location(slug: str, poi_slug: str, data: DestinationLocationEdit,
+                        db: Session = Depends(get_db), editor: User = Depends(require_editor)):
+    place = _place(db, slug)
+    poi = db.scalar(select(PointOfInterest).where(PointOfInterest.destination_id == place.id,
+                                                  PointOfInterest.slug == poi_slug))
+    if poi is None:
+        raise HTTPException(status_code=404, detail='Attraction not found')
+    if poi.content_status in ('published', 'sample') and 'admin' not in active_roles(db, editor):
+        raise HTTPException(status_code=403, detail='Only administrators can change locations of public attractions')
+    poi.latitude, poi.longitude = data.latitude, data.longitude
+    poi.location = (func.ST_SetSRID(func.ST_MakePoint(data.longitude, data.latitude), 4326)
+                    if data.latitude is not None else None)
+    poi.location_source_url = data.location_source_url
+    _audit(db, editor, 'destination.poi_location_changed', place, poi_slug[:120])
+    db.commit()
+    return {'status':'saved', 'slug':poi_slug}
 
 
 @router.post('/destinations/{slug}/pois/{poi_slug}/publish')

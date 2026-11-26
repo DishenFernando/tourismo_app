@@ -1,0 +1,76 @@
+
+
+def _image_links(db: Session, ids: list[UUID]) -> dict[UUID, list[str]]:
+    if not ids:
+        return {}
+    result: dict[UUID, list[str]] = {}
+    for image_id, review_id in db.execute(select(CustomerReviewImage.id, CustomerReviewImage.review_id)
+            .where(CustomerReviewImage.review_id.in_(ids)).order_by(CustomerReviewImage.position)).all():
+        result.setdefault(review_id, []).append('/api/v1/reviews/images/' + str(image_id))
+    return result
+
+
+def _save_review(db: Session, row: CustomerReview, payload: ReviewWrite, user: User, *, editing: bool):
+    from tourismo.reviews.safety import moderate_content, normalize_images
+    new_images = normalize_images(payload.images)
+    previous = []
+    if editing and payload.images is None:
+        previous = [img.jpeg_data for img in db.scalars(select(CustomerReviewImage)
+                    .where(CustomerReviewImage.review_id == row.id)
+                    .order_by(CustomerReviewImage.position)).all()]
+    state = moderate_content(payload.title, payload.body, new_images if payload.images is not None else previous)
+    row.rating, row.title, row.body = payload.rating, payload.title, payload.body
+    row.state = state
+    row.updated_at = now_utc()
+    row.moderation_note, row.moderated_by, row.moderated_at = None, None, None
+    db.add(row)
+    db.flush()
+    if payload.images is not None:
+        for img in db.scalars(select(CustomerReviewImage).where(
+                CustomerReviewImage.review_id == row.id)).all():
+            db.delete(img)
+        db.flush()  # release unique (review_id, position) before replacement
+        for pos, data in enumerate(new_images):
+            db.add(CustomerReviewImage(review_id=row.id, position=pos, jpeg_data=data))
+    if editing:
+        reply = db.get(CustomerReviewReply, row.id)
+        if reply is not None and reply.state == 'published':
+            reply.state = 'pending'  # existing Phase 7 behavior
+    _audited(db, user, 'customer_review_edited' if editing else 'customer_review_submitted', row.id)
+    db.commit()
+    return {'review': _own_dict(row, _image_links(db, [row.id]).get(row.id, [])),
+            'message': ('Your review is now public' if state == 'published'
+                        else 'Your review is awaiting a safety check by the Tourismo team')}
+
+
+@public_router.patch('/{review_id}')
+def edit_feedback(review_id: UUID, body: ReviewWrite, user: User = Depends(require_user),
+                  db: Session = Depends(get_db)):
+    row = db.scalar(select(CustomerReview).where(CustomerReview.id == review_id).with_for_update())
+    if row is None or row.author_id != user.id:
+        raise HTTPException(404, 'Your review was not found')
+    if row.state == 'hidden':
+        raise HTTPException(409, 'This review has been closed by moderation')
+    listing = db.get(ServiceListing, row.listing_id)
+    if listing is None:
+        raise HTTPException(404, 'Service no longer exists')
+    _public_listing(db, listing.slug)
+    _eligible_author(db, user, listing)
+    return _save_review(db, row, body, user, editing=True)
+
+
+@public_router.get('/images/{image_id}')
+def public_review_image(image_id: UUID, db: Session = Depends(get_db)):
+    image = db.get(CustomerReviewImage, image_id)
+    if image is None:
+        raise HTTPException(404, 'Image not found')
+    row = db.get(CustomerReview, image.review_id)
+    if row is None or row.state != 'published':
+        raise HTTPException(404, 'Image not found')
+    listing = db.get(ServiceListing, row.listing_id)
+    if listing is None:
+        raise HTTPException(404, 'Image not found')
+    _public_listing(db, listing.slug)
+    return Response(content=image.jpeg_data, media_type='image/jpeg', headers={
+        'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff',
+    })

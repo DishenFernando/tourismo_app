@@ -244,3 +244,13 @@ Read `docs/PHASE2_PART5_PILOT_GUIDES.md` for sources, limitations, DBeaver check
 ## Phase 3.1 — Vendor onboarding
 
 See [vendor application and manual verification guide](docs/PHASE3_PART1_VENDOR_ONBOARDING.md). Four additive private vendor tables and the `/vendors` and `/admin/vendors` screens have been added. The implementation does not yet upload private documents, publish listings, or activate trials.
+
+
+## Phase 7 — Customer reviews and trust (changes-only release)
+
+Traveler ratings, independently moderated comments, provider responses, and abuse reports are documented in [`docs/PHASE7_CUSTOMER_REVIEWS_AND_TRUST.md`](docs/PHASE7_CUSTOMER_REVIEWS_AND_TRUST.md). New migration `0016_customer_reviews`; run `scripts/verify-phase7.ps1` after local deployment. The unrelated `service_listing_reviews` editorial approval table is unchanged.
+
+
+## Phase 8 — Private tourist/vendor enquiries (source update)
+
+See [Phase 8 quick start](docs/PHASE8_START_HERE.md) and [Phase 8 technical/operating documentation](docs/PHASE8_TOURIST_VENDOR_ENQUIRIES.md). It adds new `/enquiries`, `/vendor/enquiries`, and `/admin/enquiry-reports` pages, plus migration `0018_service_enquiries`. Guests can still browse; this remains a no-booking/no-payment application. Phase 7.1 live deployment is a prerequisite.

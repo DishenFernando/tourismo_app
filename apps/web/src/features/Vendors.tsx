@@ -108,28 +108,28 @@ export function Vendors() {
           <label className="field">Business name *<input required minLength={2} maxLength={160} autoComplete="organization" placeholder="e.g. Mountain View Guesthouse" value={newBusiness.business_name} onChange={e=>setNewBusiness(v=>({...v,business_name:e.target.value}))}/></label>
           <label className="field sm:col-span-2">Business email *<input required type="email" maxLength={320} autoComplete="email" placeholder="contact@business.com" value={newBusiness.contact_email} onChange={e=>setNewBusiness(v=>({...v,contact_email:e.target.value}))}/></label>
         </div>
-        <button type="submit" disabled={busy} className="btn-primary w-full justify-center">{busy?'Savingâ€¦':'Create my private business draft'}</button>
+        <button type="submit" disabled={busy} className="btn-primary w-full justify-center">{busy?'Saving…':'Create my private business draft'}</button>
         <p className="text-xs text-ink/60">No license number, documents, or payment required to start a draft. They are needed later for independent verification.</p>
       </form>}
       {organizations.length===0&&!showCreate&&<section className="empty-state"><Building2 size={32}/><p>No businesses registered yet. Start with your organization's legal details.</p></section>}
       {organizations.length>0&&<div className="grid gap-6 lg:grid-cols-[minmax(220px,.8fr)_minmax(0,1.5fr)] items-start">
         <nav aria-label="Your organizations" className="form-panel space-y-2">
           {organizations.map(o=><button key={o.id} type="button" onClick={()=>{setSelected(o.id);setVendorTab('details');setEditing(false);setError('');setNotice('')}} className={`w-full p-3 text-left rounded-xl border ${selected===o.id?'border-pine bg-[#eaf5ef]':'border-ink/10'}`}>
-            <span className="block font-bold">{o.business_name}</span><span className="text-xs text-ink/60 capitalize">{o.category.replace('_',' ')} Â· {o.verification_state.replace('_',' ')}</span>
+            <span className="block font-bold">{o.business_name}</span><span className="text-xs text-ink/60 capitalize">{o.category.replace('_',' ')} · {o.verification_state.replace('_',' ')}</span>
           </button>)}
         </nav>
         {current&&<section className="form-panel space-y-5"><div className="flex justify-between items-start gap-3 flex-wrap"><div><h2 className="text-xl font-extrabold">{current.business_name}</h2><p className="text-sm text-ink/60">{current.district && current.province?`${current.district}, ${current.province}`:'Location not added yet'}</p></div><span className="rounded-full bg-[#e9f4ed] text-pine px-3 py-1 text-sm font-bold capitalize">{current.verification_state.replace('_',' ')}</span></div>
-          <p className="text-sm text-ink/70">Business contact: {current.contact_email} Â· {current.contact_phone||'No phone provided'}</p>
+          <p className="text-sm text-ink/70">Business contact: {current.contact_email} · {current.contact_phone||'No phone provided'}</p>
           <div className="rounded-xl border border-[#cddfd9] bg-white p-4" aria-label="Verification progress">
             <h3 className="font-extrabold">Your setup journey</h3>
             <ol className="mt-2 grid gap-2 sm:grid-cols-3 text-sm">
-              <li className="rounded-lg bg-[#eff8f3] p-3"><b>1 Â· Business draft âœ“</b><p>You're in. Keep editing privately.</p></li>
-              <li className="rounded-lg bg-[#eff8f3] p-3"><b>2 Â· Complete details {current.province&&current.district&&current.operating_address&&(current.registration_no||current.license_no)?'âœ“':''}</b><p>Add address and registration information.</p></li>
-              <li className="rounded-lg bg-[#eff8f3] p-3"><b>3 Â· Request verification</b><p>Add evidence, then submit for review.</p></li>
+              <li className="rounded-lg bg-[#eff8f3] p-3"><b>1 · Business draft ✓</b><p>You're in. Keep editing privately.</p></li>
+              <li className="rounded-lg bg-[#eff8f3] p-3"><b>2 · Complete details {current.province&&current.district&&current.operating_address&&(current.registration_no||current.license_no)?'✓':''}</b><p>Add address and registration information.</p></li>
+              <li className="rounded-lg bg-[#eff8f3] p-3"><b>3 · Request verification</b><p>Add evidence, then submit for review.</p></li>
             </ol>
           </div>
           <nav className="flex flex-wrap gap-2" aria-label="Business dashboard sections">
-            {([{key:'details',label:'1 Â· Business details'},{key:'verification',label:'2 Â· Verification'},{key:'team',label:'3 Â· Team (optional)'}] as const).map(tab=><button key={tab.key} type="button" aria-pressed={vendorTab===tab.key} className={`rounded-xl px-3 py-2 text-sm font-bold border ${vendorTab===tab.key?'border-pine bg-[#e4f2eb] text-pine':'border-ink/10'}`} onClick={()=>setVendorTab(tab.key)}>{tab.label}</button>)}
+            {([{key:'details',label:'1 · Business details'},{key:'verification',label:'2 · Verification'},{key:'team',label:'3 · Team (optional)'}] as const).map(tab=><button key={tab.key} type="button" aria-pressed={vendorTab===tab.key} className={`rounded-xl px-3 py-2 text-sm font-bold border ${vendorTab===tab.key?'border-pine bg-[#e4f2eb] text-pine':'border-ink/10'}`} onClick={()=>setVendorTab(tab.key)}>{tab.label}</button>)}
           </nav>
           {vendorTab==='details'&&<div className="space-y-4">
           {current.review_feedback&&<div className="border border-amber-200 bg-amber-50 rounded-xl p-4 text-sm"><b>Administrator feedback:</b> {current.review_feedback}</div>}
@@ -142,13 +142,13 @@ export function Vendors() {
             <label className="field sm:col-span-2">Operating address<textarea required minLength={6} maxLength={800} value={applicationEdit.operating_address||''} onChange={e=>setApplicationEdit(v=>({...v,operating_address:e.target.value}))}/></label>
             <button type="submit" disabled={busy} className="btn-primary sm:col-span-2 justify-center">Save changes</button>
           </form>}
-          <button type="button" className="btn-secondary" onClick={()=>setVendorTab('verification')}>Continue to verification â†’</button>
+          <button type="button" className="btn-secondary" onClick={()=>setVendorTab('verification')}>Continue to verification →</button>
           </div>}
-          <div className="info-banner"><ShieldCheck size={19}/> {current.verification_state==='approved'?'Organization verification approved. You can now create service listing drafts and submit them for independent publication review. Subscription activation is separate.':current.verification_state==='submitted'?'Awaiting independent administrator review. Business details are locked during review.':'Verification is not complete. This business is not discoverable until verification and a listing are separately approved.'}</div>
+          <div className="info-banner"><ShieldCheck size={19}/> {current.verification_state==='approved'?'Verification approved. Approved listings can now display the verified business badge. Subscription activation is separate.':current.verification_state==='submitted'?'Awaiting independent administrator review. Business details are locked during review.':'You can create and submit complete service listings for separate content approval while verification is pending. Verified badges are reserved for approved businesses; licensing rules still apply.'}</div>
           {vendorTab==='verification'&&<div className="space-y-4">
           <h3 className="font-extrabold">License & registration references</h3>
           <p className="text-sm text-ink/60">Reference details are private and require manual cross-checking. Private attachments are supported below. Reference details still require independent validation.</p>
-          {references.map(r=><p key={r.id} className="text-sm border border-ink/10 rounded-lg p-3"><b>{r.evidence_type.replaceAll('_',' ')}</b> Â· {r.issuer} Â· {r.reference_number}{r.expires_on?` Â· Expires ${r.expires_on}`:''}</p>)}
+          {references.map(r=><p key={r.id} className="text-sm border border-ink/10 rounded-lg p-3"><b>{r.evidence_type.replaceAll('_',' ')}</b> · {r.issuer} · {r.reference_number}{r.expires_on?` · Expires ${r.expires_on}`:''}</p>)}
           {editable&&<form onSubmit={addEvidence} className="grid gap-3 sm:grid-cols-2">
             <label className="field">Reference type<select value={newEvidence.evidence_type} onChange={e=>setNewEvidence(v=>({...v,evidence_type:e.target.value as VendorEvidence['evidence_type']}))}><option value="business_registration">Business registration</option><option value="tourism_license">Tourism license</option><option value="professional_license">Professional license</option><option value="other_permit">Other permit</option></select></label>
             <label className="field">Issuing authority *<input required minLength={2} maxLength={160} value={newEvidence.issuer} onChange={e=>setNewEvidence(v=>({...v,issuer:e.target.value}))}/></label>
@@ -163,14 +163,14 @@ export function Vendors() {
             <h3 className="font-extrabold">Private verification documents</h3>
             <p className="text-sm text-ink/60">Attach a PDF, PNG or JPEG to an existing registration reference (maximum 5 MB). Files stay private. An antivirus scan is required before anyone can download an attachment or use it in approval.</p>
             {documents.map(doc=><div key={doc.id} className="flex flex-wrap gap-3 items-center justify-between border border-ink/10 rounded-xl p-3 text-sm">
-              <div><b>{doc.name}</b><p className="text-xs text-ink/60">{Math.ceil(doc.size_bytes/1024)} KB Â· {doc.scan_state.replace('_',' ')}</p></div>
+              <div><b>{doc.name}</b><p className="text-xs text-ink/60">{Math.ceil(doc.size_bytes/1024)} KB · {doc.scan_state.replace('_',' ')}</p></div>
               <div className="flex gap-2">
                 {doc.downloadable&&<button className="btn-secondary" type="button" disabled={busy} onClick={()=>void (async()=>{try{const jwt=await auth.token();if(jwt)await downloadVendorDocument(current.id,doc.id,jwt)}catch(e){setError(String(e))}})()}>Download</button>}
                 {editable&&<button className="btn-secondary" type="button" disabled={busy} onClick={()=>void run(jwt=>deleteVendorDocument(current.id,doc.id,jwt),'Document deleted.')}>Delete</button>}
               </div>
             </div>)}
             {editable&&references.length>0&&<form className="grid sm:grid-cols-2 gap-3" onSubmit={e=>{e.preventDefault();if(!file||!evidenceId)return;void run(jwt=>uploadVendorDocument(current.id,evidenceId,file,jwt),'Evidence document securely submitted for scanning.');setFile(null)}}>
-              <label className="field">Matching evidence reference<select required value={evidenceId} onChange={e=>setEvidenceId(e.target.value)}><option value="">Select a reference</option>{references.map(ref=><option key={ref.id} value={ref.id}>{ref.evidence_type} Â· {ref.reference_number}</option>)}</select></label>
+              <label className="field">Matching evidence reference<select required value={evidenceId} onChange={e=>setEvidenceId(e.target.value)}><option value="">Select a reference</option>{references.map(ref=><option key={ref.id} value={ref.id}>{ref.evidence_type} · {ref.reference_number}</option>)}</select></label>
               <label className="field">Evidence file<input required type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={e=>setFile(e.target.files?.[0]||null)}/></label>
               <button className="btn-secondary sm:col-span-2 justify-center" disabled={busy||!file||!evidenceId||file.size>5*1024*1024} type="submit">Upload private document</button>
               {file&&file.size>5*1024*1024&&<p className="text-red-700 text-sm">File exceeds the 5 MB limit.</p>}
@@ -179,12 +179,12 @@ export function Vendors() {
             {documents.some(d=>d.scan_state==='pending_scan')&&<p className="text-amber-800 text-sm">Some documents are awaiting antivirus scanning; they cannot be opened yet. Contact the platform administrator if they remain pending.</p>}
           </section>
           </div>}
-          {vendorTab==='team'&&<div className="border-t border-ink/10 pt-4"><h3 className="font-extrabold flex items-center gap-2"><Users size={18}/> Team members</h3><div className="mt-3 space-y-1">{members.map(m=><p className="text-xs text-ink/70" key={m.id}>{m.role} Â· {m.state} Â· {m.user_id}</p>)}</div>
+          {vendorTab==='team'&&<div className="border-t border-ink/10 pt-4"><h3 className="font-extrabold flex items-center gap-2"><Users size={18}/> Team members</h3><div className="mt-3 space-y-1">{members.map(m=><p className="text-xs text-ink/70" key={m.id}>{m.role} · {m.state} · {m.user_id}</p>)}</div>
             {owner&&<form className="grid gap-3 sm:grid-cols-2 mt-4" onSubmit={invite}><label className="field sm:col-span-2">Team member's verified Tourismo email<input required type="email" value={inviteEmail} onChange={e=>setInviteEmail(e.target.value)} placeholder="colleague@example.com"/><span className="text-xs text-ink/60">This person must have signed into Tourismo once with a verified email. Invitations appear in their account; Tourismo does not send invitation emails yet.</span></label><label className="field">Role<select value={inviteRole} onChange={e=>setInviteRole(e.target.value as 'staff'|'manager')}><option value="staff">Staff (read-only)</option><option value="manager">Manager (edit drafts)</option></select></label><button type="submit" disabled={busy} className="btn-secondary self-end justify-center">Invite team member</button></form>}
           </div>}
         </section>}
       </div>}
-      {invitations.length>0&&<section className="form-panel"><h2 className="text-lg font-extrabold">Team invitations</h2>{invitations.map(inv=><div key={inv.id} className="flex items-center justify-between py-3 gap-3"><p className="text-sm">Invitation for organization {inv.organization_id} Â· {inv.role}</p><button disabled={busy} className="btn-secondary" onClick={()=>void run(jwt=>acceptVendorInvitation(inv.id,jwt),'Invitation accepted.')}>Accept</button></div>)}</section>}
+      {invitations.length>0&&<section className="form-panel"><h2 className="text-lg font-extrabold">Team invitations</h2>{invitations.map(inv=><div key={inv.id} className="flex items-center justify-between py-3 gap-3"><p className="text-sm">Invitation for organization {inv.organization_id} · {inv.role}</p><button disabled={busy} className="btn-secondary" onClick={()=>void run(jwt=>acceptVendorInvitation(inv.id,jwt),'Invitation accepted.')}>Accept</button></div>)}</section>}
       <div className="text-sm text-ink/60 flex gap-2 items-start"><UserRound size={17}/><p>Your Tourismo profile remains a personal tourist account. You can register a business without losing access to your saved trips. <Link to="/account" className="underline text-pine">Manage profile</Link>.</p></div>
       <div className="flex flex-wrap gap-4 items-center"><Link to="/vendor/listings" className="btn-primary"><Building2 size={17}/> Manage service listings</Link><button onClick={()=>void refresh().catch(e=>setError(String(e)))} className="text-sm text-pine underline inline-flex items-center gap-2"><RefreshCw size={15}/> Refresh organizations</button></div>
     </div>}

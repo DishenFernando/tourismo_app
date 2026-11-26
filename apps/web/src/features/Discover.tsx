@@ -26,6 +26,7 @@ export function Discover() {
   return <main className="wrap pt-14 min-h-[65vh]">
     <span className="small-label">EXPLORE OUR ISLAND</span><h1 className="page-title">Where will curiosity take you?</h1>
     <p className="lead">Explore Sri Lankan destinations as a guest. Editorial content is in preparation and is not presented as independently verified yet.</p>
+    <Link className="btn-secondary mt-5" to="/map"><MapPin size={16}/> Open interactive map</Link>
     <form className="mt-8 flex max-w-2xl overflow-hidden rounded-2xl border border-ink/10 bg-white shadow-card" onSubmit={e=>{e.preventDefault();setParams(term?{q:term}:{})}}>
       <Search className="text-pine ml-4 my-auto shrink-0"/><input className="w-full p-4 outline-none" aria-label="Search destinations" placeholder="Search city, town, or district" value={term} maxLength={100} onChange={e=>setTerm(e.target.value)}/>
       <button className="m-2 btn-primary" type="submit">Search</button>

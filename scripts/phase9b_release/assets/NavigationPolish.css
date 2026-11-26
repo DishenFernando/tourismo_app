@@ -1,0 +1,52 @@
+/* Tourismo Phase 9B-1: compact, readable, keyboard-friendly header.
+   Scoped to the existing header; account menu and mobile logic remain owned by Header.tsx. */
+.tourismo-navbar-shell { flex: 0 0 auto; min-width: 0; width: 100%; }
+.tourismo-navbar-shell { min-width: 0; }
+.tourismo-navbar-shell nav { min-width: 0; max-width: 100%; }
+.tourismo-navbar-shell nav a { text-decoration-skip-ink: auto; }
+.tourismo-navbar-shell a:focus-visible,
+.tourismo-navbar-shell button:focus-visible,
+.tourismo-utility-bar a:focus-visible,
+.tourismo-utility-bar button:focus-visible,
+.tourismo-utility-bar select:focus-visible {
+  outline: 3px solid #0d756e;
+  outline-offset: 3px;
+}
+/* Preserve single-line desktop links. On narrower desktop screens, navigation
+   scrolls inside its own region instead of squeezing the profile/CTA or wrapping.
+   Mobile navigation is still controlled by the existing Header component. */
+@media (min-width: 1024px) {
+  .tourismo-navbar-shell nav {
+    flex-wrap: nowrap;
+    column-gap: clamp(.45rem, .78vw, .95rem);
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+    scroll-padding-inline: 12px;
+  }
+  .tourismo-navbar-shell nav a {
+    white-space: nowrap;
+    flex-shrink: 0;
+    font-size: clamp(0.8125rem, 0.75vw + 0.18rem, 0.975rem);
+    line-height: 1.4;
+  }
+  .tourismo-navbar-shell [aria-haspopup="menu"] { min-width: 0; }
+  .tourismo-navbar-shell [aria-haspopup="menu"] [class*="truncate"] {
+    max-width: clamp(7ch, 9vw, 16ch);
+  }
+}
+.tourismo-utility-bar { border-bottom: 1px solid rgba(10,42,51,.12); background: #fcfbf8; }
+.tourismo-utility-bar .tourismo-utility-inner { min-height: 54px; }
+.tourismo-utility-bar details[open] { position: relative; }
+.tourismo-utility-bar summary { cursor: pointer; }
+.tourismo-utility-bar summary:focus-visible { border-radius: .25rem; }
+.tourismo-utility-bar .tourismo-translation-note { max-width: 34rem; line-height: 1.6; }
+@media (max-width: 480px) {
+  .tourismo-utility-bar .tourismo-utility-inner { justify-content: space-between; gap: .5rem; }
+  .tourismo-utility-bar select { max-width: 8.5rem; }
+  .tourismo-utility-bar details { flex-basis: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tourismo-navbar-shell *, .tourismo-utility-bar * { scroll-behavior: auto !important; }
+}

@@ -65,7 +65,7 @@ def test_incomplete_draft_cannot_be_submitted_even_after_organization_approval(m
                            title='Quick example',summary='',description='',details={}, public_email='vendor@example.com')
     db=MagicMock()
     monkeypatch.setattr(routes,'_member_listing',lambda *_a,**_k:(org,listing))
-    monkeypatch.setattr(routes,'_approved_org',lambda *_a,**_k:None)
+    monkeypatch.setattr(routes,'_publishable_org',lambda *_a,**_k:None)
     with pytest.raises(HTTPException) as exc:
         routes.submit_listing(org.id,listing.id,user,db)
     assert exc.value.status_code==422

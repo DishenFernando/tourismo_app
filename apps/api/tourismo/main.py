@@ -21,7 +21,16 @@ from tourismo.vendors.documents import router as vendor_documents_router, admin_
 from tourismo.listings.routes import public_router as listings_public_router, vendor_router as listings_vendor_router, admin_router as listings_admin_router
 from tourismo.listings.media import vendor_router as listing_media_vendor_router, public_router as listing_media_public_router
 from tourismo.demo.routes import router as demo_router
+from tourismo.maps.routes import router as map_router
+from tourismo.maps.geo_quality import router as geo_quality_router
+from tourismo.reviews.routes import (public_router as customer_reviews_public_router,
+    vendor_router as customer_reviews_vendor_router, admin_router as customer_reviews_admin_router)
 from tourismo.admin.media import admin_router as media_admin_router, public_router as media_public_router
+from tourismo.enquiries.routes import (traveler_router as enquiries_traveler_router,
+    vendor_router as enquiries_vendor_router, admin_router as enquiries_admin_router)
+
+from tourismo.notifications.routes import router as notifications_router, admin_router as announcements_admin_router
+from tourismo.navigation.routes import router as travel_navigation_router
 
 settings = get_settings()
 _guest_rate_buckets: dict[str, deque[float]] = {}
@@ -33,7 +42,7 @@ def over_guest_limit(request: Request) -> bool:
 
     Production must also use a shared edge/Redis-level limiter across replicas.
     """
-    if request.url.path not in ('/api/v1/trips/preview', '/api/v1/destinations', '/api/v1/listings'):
+    if request.url.path not in ('/api/v1/navigation/estimate', '/api/v1/trips/preview', '/api/v1/destinations', '/api/v1/listings', '/api/v1/map/points', '/api/v1/map/viewport', '/api/v1/map/nearby', '/api/v1/map/itinerary-places', '/api/v1/map/resolve-location') and not request.url.path.startswith('/api/v1/reviews/'):
         return False
     remote = request.client.host if request.client else 'unknown'
     key = f'{remote}:{request.url.path}'
@@ -46,7 +55,7 @@ def over_guest_limit(request: Request) -> bool:
         bucket = _guest_rate_buckets.setdefault(key, deque())
         while bucket and current - bucket[0] > 60:
             bucket.popleft()
-        if len(bucket) >= settings.rate_limit_requests:
+        if len(bucket) >= (5 if request.url.path == '/api/v1/navigation/estimate' else (12 if request.url.path == '/api/v1/map/resolve-location' else settings.rate_limit_requests)):
             return True
         bucket.append(current)
     return False
@@ -114,6 +123,17 @@ app.include_router(listings_admin_router)
 app.include_router(listing_media_vendor_router)
 app.include_router(listing_media_public_router)
 app.include_router(demo_router)
+app.include_router(map_router)
+app.include_router(geo_quality_router)
+app.include_router(customer_reviews_public_router)
+app.include_router(customer_reviews_vendor_router)
+app.include_router(customer_reviews_admin_router)
+app.include_router(enquiries_traveler_router)
+app.include_router(enquiries_vendor_router)
+app.include_router(enquiries_admin_router)
+app.include_router(travel_navigation_router)
+app.include_router(notifications_router)
+app.include_router(announcements_admin_router)
 
 # Statically compiled React is served by this API container on Render.
 web_dist = Path(settings.web_dist_path)

@@ -1,0 +1,10 @@
+Tourismo Phase 7.1 Review Enhancements — 2026-11-23
+Delivery: bootstrap Git patch (adds patch generator/templates), and standalone ZIP alternative
+Source patch: export against exact user's Phase 7 checkout via tools/apply_phase7_1.py --export-patch <path>
+Features: max five reviews per user per listing; max five photos per review; five per page; automated moderation and administrator review for flagged text
+Migration: 0017_review_media (down_revision 0016_customer_reviews)
+External moderation: OpenAI omni-moderation-latest; OPENAI_API_KEY server-side only; missing key fails closed
+No database overwrite; no changes to infra/compose.yaml or .env
+Tests run here: synthetic Phase7 dry-run, exact patch generation, git apply --check, git apply, Python syntax.
+NOT validated: the user's local checkout, Vite/React build, Docker/Clerk, live Postgres migration, full integration/browser.
+Phase8 old 0017_service_enquiries must be rebased after Phase7.1.

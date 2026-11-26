@@ -1,3 +1,4 @@
+import {TravelDirections} from './TravelDirections'
 import { ArrowLeft, ArrowRight, BadgeInfo, BookOpen, Compass, ExternalLink, Landmark, Languages, MapPin, ShieldCheck } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom'
@@ -77,6 +78,8 @@ export function DestinationPage() {
           <div className="flex flex-wrap gap-3 items-center mt-6">
             <button className="btn-primary" onClick={()=>navigate(`/plan?destination=${encodeURIComponent(destination.slug)}`)}>Plan a trip here <ArrowRight size={18}/></button>
             <Link className="btn-secondary" to={`/listings?destination=${encodeURIComponent(destination.slug)}`}>Find services in this region <MapPin size={17}/></Link>
+            <Link className="btn-secondary" to="/map">Explore map <MapPin size={17}/></Link>
+            <Link className="btn-secondary" to={`/nearby?destination=${encodeURIComponent(destination.slug)}`}>Explore nearby <MapPin size={17}/></Link>
             <label className="flex items-center gap-2 text-sm font-semibold text-ink/70"><Languages size={17}/><span>Content language</span>
               <select className="rounded-lg border border-ink/15 bg-white px-3 py-2" aria-label="Guide language" value={locale}
                 onChange={e=>setParams(e.target.value==='en'?{}:{locale:e.target.value})}>
@@ -101,6 +104,7 @@ export function DestinationPage() {
         </div>
       </div>
 
+      <TravelDirections kind="destination" slug={destination.slug}/>
       {contentError && <p role="alert" className="error-banner mt-7">{contentError}</p>}
       <div className="mt-12 grid gap-7 lg:grid-cols-3">
         <section className="form-panel lg:col-span-2" aria-labelledby="highlights-heading">
